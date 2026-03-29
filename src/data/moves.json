@@ -1,0 +1,247 @@
+{
+  "Earthquake": {
+    "name": "Earthquake", "type": "Ground", "category": "Physical", "basePower": 100,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": { "slicing": false, "contact": false },
+    "secondaryEffect": false,
+    "isSpread": true
+  },
+  "Close Combat": {
+    "name": "Close Combat", "type": "Fighting", "category": "Physical", "basePower": 120,
+    "pp": 8, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "secondaryEffect": true
+  },
+  "Flare Blitz": {
+    "name": "Flare Blitz", "type": "Fire", "category": "Physical", "basePower": 120,
+    "pp": 8, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "recoil": [33, 100],
+    "secondaryEffect": true
+  },
+  "Bullet Punch": {
+    "name": "Bullet Punch", "type": "Steel", "category": "Physical", "basePower": 40,
+    "pp": 20, "accuracy": 100, "priority": 1,
+    "flags": { "contact": true, "punch": true },
+    "secondaryEffect": false
+  },
+  "Shadow Claw": {
+    "name": "Shadow Claw", "type": "Ghost", "category": "Physical", "basePower": 70,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true, "slicing": true },
+    "secondaryEffect": false
+  },
+  "Dragon Claw": {
+    "name": "Dragon Claw", "type": "Dragon", "category": "Physical", "basePower": 80,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true, "slicing": true },
+    "secondaryEffect": false
+  },
+  "Iron Head": {
+    "name": "Iron Head", "type": "Steel", "category": "Physical", "basePower": 80,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "secondaryEffect": true
+  },
+  "Moonblast": {
+    "name": "Moonblast", "type": "Fairy", "category": "Special", "basePower": 95,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": true
+  },
+  "Psychic": {
+    "name": "Psychic", "type": "Psychic", "category": "Special", "basePower": 90,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": true
+  },
+  "Flamethrower": {
+    "name": "Flamethrower", "type": "Fire", "category": "Special", "basePower": 90,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": true
+  },
+  "Ice Beam": {
+    "name": "Ice Beam", "type": "Ice", "category": "Special", "basePower": 90,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": true
+  },
+  "Thunderbolt": {
+    "name": "Thunderbolt", "type": "Electric", "category": "Special", "basePower": 90,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": true
+  },
+  "Surf": {
+    "name": "Surf", "type": "Water", "category": "Special", "basePower": 90,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": false,
+    "isSpread": true
+  },
+  "Energy Ball": {
+    "name": "Energy Ball", "type": "Grass", "category": "Special", "basePower": 90,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": { "bullet": true },
+    "secondaryEffect": true
+  },
+  "Draco Meteor": {
+    "name": "Draco Meteor", "type": "Dragon", "category": "Special", "basePower": 130,
+    "pp": 8, "accuracy": 90, "priority": 0,
+    "flags": {},
+    "secondaryEffect": true
+  },
+  "Stone Edge": {
+    "name": "Stone Edge", "type": "Rock", "category": "Physical", "basePower": 100,
+    "pp": 8, "accuracy": 80, "priority": 0,
+    "flags": {},
+    "secondaryEffect": false
+  },
+  "Knock Off": {
+    "name": "Knock Off", "type": "Dark", "category": "Physical", "basePower": 65,
+    "pp": 16, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "secondaryEffect": true,
+    "bpModifier": "knock_off"
+  },
+  "U-turn": {
+    "name": "U-turn", "type": "Bug", "category": "Physical", "basePower": 70,
+    "pp": 16, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "secondaryEffect": false
+  },
+  "Protect": {
+    "name": "Protect", "type": "Normal", "category": "Status", "basePower": 0,
+    "pp": 8, "accuracy": 100, "priority": 4,
+    "flags": {},
+    "secondaryEffect": false
+  },
+  "Swords Dance": {
+    "name": "Swords Dance", "type": "Normal", "category": "Status", "basePower": 0,
+    "pp": 16, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": false
+  },
+  "Dragon Dance": {
+    "name": "Dragon Dance", "type": "Dragon", "category": "Status", "basePower": 0,
+    "pp": 16, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": false
+  },
+  "Foul Play": {
+    "name": "Foul Play", "type": "Dark", "category": "Physical", "basePower": 95,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "secondaryEffect": false,
+    "overrideOffensiveStat": "atk",
+    "useTargetOffensiveStat": true
+  },
+  "Body Press": {
+    "name": "Body Press", "type": "Fighting", "category": "Physical", "basePower": 80,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "secondaryEffect": false,
+    "overrideOffensiveStat": "def"
+  },
+  "Psyshock": {
+    "name": "Psyshock", "type": "Psychic", "category": "Special", "basePower": 80,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": false,
+    "overrideDefensiveStat": "def"
+  },
+  "Facade": {
+    "name": "Facade", "type": "Normal", "category": "Physical", "basePower": 70,
+    "pp": 16, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "secondaryEffect": false,
+    "bpModifier": "facade"
+  },
+  "Acrobatics": {
+    "name": "Acrobatics", "type": "Flying", "category": "Physical", "basePower": 55,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "secondaryEffect": false,
+    "bpModifier": "acrobatics"
+  },
+  "Hex": {
+    "name": "Hex", "type": "Ghost", "category": "Special", "basePower": 65,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": false,
+    "bpModifier": "hex"
+  },
+  "Brave Bird": {
+    "name": "Brave Bird", "type": "Flying", "category": "Physical", "basePower": 120,
+    "pp": 8, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "recoil": [33, 100],
+    "secondaryEffect": false
+  },
+  "Giga Drain": {
+    "name": "Giga Drain", "type": "Grass", "category": "Special", "basePower": 75,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "drain": [1, 2],
+    "secondaryEffect": false
+  },
+  "Rock Slide": {
+    "name": "Rock Slide", "type": "Rock", "category": "Physical", "basePower": 75,
+    "pp": 12, "accuracy": 90, "priority": 0,
+    "flags": {},
+    "secondaryEffect": true,
+    "isSpread": true
+  },
+  "Heat Wave": {
+    "name": "Heat Wave", "type": "Fire", "category": "Special", "basePower": 95,
+    "pp": 12, "accuracy": 90, "priority": 0,
+    "flags": {},
+    "secondaryEffect": true,
+    "isSpread": true
+  },
+  "Hyper Voice": {
+    "name": "Hyper Voice", "type": "Normal", "category": "Special", "basePower": 90,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": { "sound": true },
+    "secondaryEffect": false,
+    "isSpread": true
+  },
+  "Icicle Spear": {
+    "name": "Icicle Spear", "type": "Ice", "category": "Physical", "basePower": 25,
+    "pp": 20, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "multiHit": [2, 5],
+    "secondaryEffect": false
+  },
+  "Aura Sphere": {
+    "name": "Aura Sphere", "type": "Fighting", "category": "Special", "basePower": 80,
+    "pp": 16, "accuracy": 101, "priority": 0,
+    "flags": { "pulse": true },
+    "secondaryEffect": false
+  },
+  "Solar Beam": {
+    "name": "Solar Beam", "type": "Grass", "category": "Special", "basePower": 120,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": {},
+    "secondaryEffect": false
+  },
+  "Crunch": {
+    "name": "Crunch", "type": "Dark", "category": "Physical", "basePower": 80,
+    "pp": 12, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true, "bite": true },
+    "secondaryEffect": true
+  },
+  "Sucker Punch": {
+    "name": "Sucker Punch", "type": "Dark", "category": "Physical", "basePower": 70,
+    "pp": 8, "accuracy": 100, "priority": 1,
+    "flags": { "contact": true },
+    "secondaryEffect": false
+  },
+  "Return": {
+    "name": "Return", "type": "Normal", "category": "Physical", "basePower": 102,
+    "pp": 16, "accuracy": 100, "priority": 0,
+    "flags": { "contact": true },
+    "secondaryEffect": false
+  }
+}

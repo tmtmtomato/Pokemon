@@ -1,0 +1,112 @@
+{
+  "Choice Band": {
+    "name": "Choice Band",
+    "statBoost": { "stat": "atk", "multiplier": 1.5 },
+    "choiceLock": true
+  },
+  "Choice Specs": {
+    "name": "Choice Specs",
+    "statBoost": { "stat": "spa", "multiplier": 1.5 },
+    "choiceLock": true
+  },
+  "Choice Scarf": {
+    "name": "Choice Scarf",
+    "statBoost": { "stat": "spe", "multiplier": 1.5 },
+    "choiceLock": true
+  },
+  "Life Orb": {
+    "name": "Life Orb",
+    "conditionalDamage": { "condition": "always", "modifier": 5324 }
+  },
+  "Expert Belt": {
+    "name": "Expert Belt",
+    "conditionalDamage": { "condition": "super_effective", "modifier": 4915 }
+  },
+  "Assault Vest": {
+    "name": "Assault Vest",
+    "statBoost": { "stat": "spd", "multiplier": 1.5 }
+  },
+  "Eviolite": {
+    "name": "Eviolite",
+    "conditionalDamage": { "condition": "nfe_defense", "modifier": 6144 }
+  },
+  "Leftovers": {
+    "name": "Leftovers"
+  },
+  "Rocky Helmet": {
+    "name": "Rocky Helmet"
+  },
+  "Focus Sash": {
+    "name": "Focus Sash"
+  },
+  "Sitrus Berry": {
+    "name": "Sitrus Berry"
+  },
+  "Lum Berry": {
+    "name": "Lum Berry"
+  },
+  "Clear Amulet": {
+    "name": "Clear Amulet"
+  },
+  "Covert Cloak": {
+    "name": "Covert Cloak"
+  },
+  "Charcoal": {
+    "name": "Charcoal",
+    "conditionalDamage": { "condition": "type_match", "modifier": 4915, "type": "Fire" }
+  },
+  "Mystic Water": {
+    "name": "Mystic Water",
+    "conditionalDamage": { "condition": "type_match", "modifier": 4915, "type": "Water" }
+  },
+  "Miracle Seed": {
+    "name": "Miracle Seed",
+    "conditionalDamage": { "condition": "type_match", "modifier": 4915, "type": "Grass" }
+  },
+  "Magnet": {
+    "name": "Magnet",
+    "conditionalDamage": { "condition": "type_match", "modifier": 4915, "type": "Electric" }
+  },
+  "Never-Melt Ice": {
+    "name": "Never-Melt Ice",
+    "conditionalDamage": { "condition": "type_match", "modifier": 4915, "type": "Ice" }
+  },
+  "Dragon Fang": {
+    "name": "Dragon Fang",
+    "conditionalDamage": { "condition": "type_match", "modifier": 4915, "type": "Dragon" }
+  },
+  "Black Belt": {
+    "name": "Black Belt",
+    "conditionalDamage": { "condition": "type_match", "modifier": 4915, "type": "Fighting" }
+  },
+  "Occa Berry": {
+    "name": "Occa Berry",
+    "resistBerry": { "type": "Fire" }
+  },
+  "Yache Berry": {
+    "name": "Yache Berry",
+    "resistBerry": { "type": "Ice" }
+  },
+  "Chople Berry": {
+    "name": "Chople Berry",
+    "resistBerry": { "type": "Fighting" }
+  },
+  "Rindo Berry": {
+    "name": "Rindo Berry",
+    "resistBerry": { "type": "Grass" }
+  },
+  "Garchompite": { "name": "Garchompite", "megaStone": "Garchomp" },
+  "Metagrossite": { "name": "Metagrossite", "megaStone": "Metagross" },
+  "Kangaskhanite": { "name": "Kangaskhanite", "megaStone": "Kangaskhan" },
+  "Tyranitarite": { "name": "Tyranitarite", "megaStone": "Tyranitar" },
+  "Scizorite": { "name": "Scizorite", "megaStone": "Scizor" },
+  "Lucarionite": { "name": "Lucarionite", "megaStone": "Lucario" },
+  "Gardevoirite": { "name": "Gardevoirite", "megaStone": "Gardevoir" },
+  "Charizardite Y": { "name": "Charizardite Y", "megaStone": "Charizard" },
+  "Meganiumite": { "name": "Meganiumite", "megaStone": "Meganium" },
+  "Feraligatrite": { "name": "Feraligatrite", "megaStone": "Feraligatr" },
+  "Emboarite": { "name": "Emboarite", "megaStone": "Emboar" },
+  "Froslassite": { "name": "Froslassite", "megaStone": "Froslass" },
+  "Dragonitite": { "name": "Dragonitite", "megaStone": "Dragonite" },
+  "Abomasite": { "name": "Abomasite", "megaStone": "Abomasnow" }
+}
