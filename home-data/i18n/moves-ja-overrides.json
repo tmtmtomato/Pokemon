@@ -1,0 +1,3 @@
+{
+  "_comment": "Manual overrides for move JP name resolution. Keys are Showdown English move names (e.g. 'Tera Blast'). Values override whatever HOME's `waza` dictionary returns (or supply a name when HOME doesn't yet ship one). Use sparingly — prefer to keep parity with the in-game JP move name."
+}

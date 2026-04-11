@@ -40,7 +40,9 @@ export function calculateDamage(
   const moveType = getEffectiveMoveType(attacker, move);
 
   // 2. Type effectiveness
-  const typeEff = getEffectiveness(moveType, defender.types);
+  // テラスタル中の防御側はテラタイプで相性判定（ステラテラは元タイプで判定）
+  const defenderTypes = defender.effectiveTypes();
+  const typeEff = getEffectiveness(moveType, defenderTypes);
   if (typeEff === 0) {
     return { rolls: new Array(16).fill(0), moveType, typeEffectiveness: 0, isCrit };
   }
@@ -71,6 +73,31 @@ export function calculateDamage(
     basePower = applyMod(basePower, MOD.x1_5);
   }
 
+  // バッテリー: 味方の特殊技ダメージ 1.3倍
+  if (field.attackerSide.isBattery && move.isSpecial()) {
+    basePower = applyMod(basePower, MOD.x1_3);
+  }
+
+  // パワースポット: 味方の全攻撃技ダメージ 1.3倍
+  if (field.attackerSide.isPowerSpot) {
+    basePower = applyMod(basePower, MOD.x1_3);
+  }
+
+  // はがねのせいしん: 味方の鋼タイプ技ダメージ 1.5倍
+  if (field.attackerSide.isSteelySpirit && moveType === 'Steel') {
+    basePower = applyMod(basePower, MOD.x1_5);
+  }
+
+  // フェアリーオーラ: フェアリー技のダメージ ~1.33倍（オーラブレイク時は0.75倍に反転）
+  if (field.isFairyAura && moveType === 'Fairy') {
+    basePower = applyMod(basePower, field.isAuraBreak ? MOD.x0_75 : MOD.x1_33);
+  }
+
+  // ダークオーラ: あく技のダメージ ~1.33倍（オーラブレイク時は0.75倍に反転）
+  if (field.isDarkAura && moveType === 'Dark') {
+    basePower = applyMod(basePower, field.isAuraBreak ? MOD.x0_75 : MOD.x1_33);
+  }
+
   basePower = Math.max(1, basePower);
 
   // 4. Offensive stat (A)
@@ -86,6 +113,23 @@ export function calculateDamage(
   const itemAtkMod = getItemAttackMod(attacker, move);
   if (itemAtkMod !== 1.0) {
     A = Math.floor(A * itemAtkMod);
+  }
+
+  // フラワーギフト: 晴れ時、味方の物理攻撃力 1.5倍
+  if (field.attackerSide.isFlowerGift && move.isPhysical()) {
+    const fgWeather = getEffectiveWeatherForAttacker(attacker, field);
+    if (fgWeather === 'Sun' || fgWeather === 'Harsh Sunshine') {
+      A = Math.floor(A * 1.5);
+    }
+  }
+
+  // わざわいのうつわ(Tablets of Ruin): 攻撃側の物理攻撃力を0.75倍
+  if (field.isTabletsOfRuin && move.isPhysical()) {
+    A = Math.floor(A * 0.75);
+  }
+  // わざわいのおふだ(Vessel of Ruin): 攻撃側の特殊攻撃力を0.75倍
+  if (field.isVesselOfRuin && move.isSpecial()) {
+    A = Math.floor(A * 0.75);
   }
 
   // 5. Defensive stat (D)
@@ -110,6 +154,23 @@ export function calculateDamage(
   const itemDefMod = getItemDefenseMod(defender, move);
   if (itemDefMod !== 1.0) {
     D = Math.floor(D * itemDefMod);
+  }
+
+  // フラワーギフト: 晴れ時、味方の特防 1.5倍
+  if (field.defenderSide.isFlowerGift && move.isSpecial()) {
+    const fgDefWeather = field.effectiveWeather();
+    if (fgDefWeather === 'Sun' || fgDefWeather === 'Harsh Sunshine') {
+      D = Math.floor(D * 1.5);
+    }
+  }
+
+  // わざわいのつるぎ(Sword of Ruin): 防御側の物理防御を0.75倍
+  if (field.isSwordOfRuin && move.isPhysical()) {
+    D = Math.floor(D * 0.75);
+  }
+  // わざわいのたま(Beads of Ruin): 防御側の特殊防御を0.75倍
+  if (field.isBeadsOfRuin && move.isSpecial()) {
+    D = Math.floor(D * 0.75);
   }
 
   D = Math.max(1, D);
@@ -196,6 +257,13 @@ export function calculateDamage(
 
     // Minimum 1 damage
     dmg = Math.max(1, dmg);
+
+    // おやこあい (Parental Bond): 2撃目 0.25倍を加算
+    // 変化技・多段技には適用されない
+    if (attacker.effectiveAbility() === 'Parental Bond' && !move.multiHit && move.category !== 'Status') {
+      const secondHit = Math.max(1, applyMod(dmg, MOD.x0_25));
+      dmg = dmg + secondHit;
+    }
 
     rolls.push(dmg);
   }

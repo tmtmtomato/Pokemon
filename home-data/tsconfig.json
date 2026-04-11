@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": false
+  },
+  "include": ["**/*.ts", "viewer/**/*.tsx"],
+  "exclude": [
+    "storage",
+    "node_modules",
+    "fetcher/probe.ts",
+    "fetcher/probe2.ts",
+    "fetcher/probe3.ts",
+    "fetcher/probe-champions.ts",
+    "fetcher/extract-dex2.ts",
+    "fetcher/fetch-bundle.ts"
+  ]
+}

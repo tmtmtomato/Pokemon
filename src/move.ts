@@ -26,7 +26,7 @@ export class Move {
   readonly isCrit: boolean;
   readonly hits: number; // for multi-hit moves, specified hit count
 
-  constructor(name: string, options?: { isCrit?: boolean; hits?: number }) {
+  constructor(name: string, options?: { isCrit?: boolean; hits?: number; isSpread?: boolean }) {
     const data = getMove(name) as (MoveData & { useTargetOffensiveStat?: boolean; isSpread?: boolean }) | undefined;
     if (!data) {
       throw new Error(`Unknown move: ${name}`);
@@ -48,7 +48,7 @@ export class Move {
     this.overrideDefensiveStat = data.overrideDefensiveStat;
     this.bpModifier = data.bpModifier;
     this.useTargetOffensiveStat = data.useTargetOffensiveStat;
-    this.isSpread = data.isSpread;
+    this.isSpread = options?.isSpread ?? data.isSpread;
 
     this.isCrit = options?.isCrit ?? false;
     this.hits = options?.hits ?? 1;

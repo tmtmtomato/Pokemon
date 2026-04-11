@@ -27,7 +27,11 @@ export function getItemDefenseMod(defender: Pokemon, move: Move): number {
   // Assault Vest
   if (item.statBoost?.stat === 'spd' && move.isSpecial()) return item.statBoost.multiplier;
 
-  // Eviolite (would need NFE check on species data - simplified for now)
+  // しんかのきせき: 未進化ポケモン (NFE) の Def・SpD 1.5倍
+  if (item.name === 'Eviolite' && defender.species.isNFE) {
+    return 1.5;
+  }
+
   return 1.0;
 }
 

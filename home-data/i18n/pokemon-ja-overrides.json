@@ -1,0 +1,126 @@
+{
+  "_comment": "Manual overrides for Pokemon JP name resolution. Keys are Showdown English names (e.g. 'Sinistcha-Masterpiece'). Values override the auto-generated name from build-pokemon-ja.mjs. Use this for forms whose JP rendering doesn't match the simple base/form rule.",
+
+  "Sinistcha-Masterpiece": "ヤバソチャ(けっさく)",
+  "Maushold-Four": "イッカネズミ(4ファミリー)",
+  "Palafin-Hero": "イルカマン(マイティ)",
+  "Mimikyu-Busted": "ミミッキュ(ばれた)",
+  "Indeedee-F": "イエッサン(♀)",
+  "Meowstic-F": "ニャオニクス(♀)",
+  "Basculegion-F": "イダイトウ(♀)",
+  "Toxtricity-Low-Key": "ストリンダー(ローキー)",
+  "Oinkologne-F": "パフュートン(♀)",
+
+  "Necrozma-Dusk-Mane": "たそがれネクロズマ",
+  "Necrozma-Dawn-Wings": "あかつきネクロズマ",
+  "Necrozma-Ultra": "ウルトラネクロズマ",
+
+  "Tatsugiri-Curly": "シャリタツ(そったすがた)",
+  "Tatsugiri-Droopy": "シャリタツ(たれたすがた)",
+  "Tatsugiri-Stretchy": "シャリタツ(のびたすがた)",
+  "Tatsugiri-Curly-Mega": "メガシャリタツ(そった)",
+  "Tatsugiri-Droopy-Mega": "メガシャリタツ(たれた)",
+
+  "Ogerpon-Wellspring": "オーガポン(いどのめん)",
+  "Ogerpon-Hearthflame": "オーガポン(かまどのめん)",
+  "Ogerpon-Cornerstone": "オーガポン(いしずえのめん)",
+  "Ogerpon-Teal-Tera": "テラスオーガポン(みどり)",
+  "Ogerpon-Wellspring-Tera": "テラスオーガポン(いど)",
+  "Ogerpon-Hearthflame-Tera": "テラスオーガポン(かまど)",
+  "Ogerpon-Cornerstone-Tera": "テラスオーガポン(いしずえ)",
+
+  "Terapagos-Terastal": "テラスタルテラパゴス",
+  "Terapagos-Stellar": "ステラテラパゴス",
+
+  "Urshifu-Rapid-Strike": "ウーラオス(れんげき)",
+  "Urshifu-Single-Strike": "ウーラオス(いちげき)",
+
+  "Calyrex-Ice": "バドレックス(はくばじょう)",
+  "Calyrex-Shadow": "バドレックス(こくばじょう)",
+
+  "Kyurem-White": "ホワイトキュレム",
+  "Kyurem-Black": "ブラックキュレム",
+
+  "Zacian-Crowned": "ザシアン(けんのおう)",
+  "Zamazenta-Crowned": "ザマゼンタ(たてのおう)",
+
+  "Eternatus-Eternamax": "ムゲンダイナ(ムゲンダイマックス)",
+
+  "Greninja-Ash": "サトシゲッコウガ",
+  "Greninja-Bond": "サトシゲッコウガ",
+
+  "Lycanroc-Midday": "ルガルガン(まひる)",
+  "Lycanroc-Midnight": "ルガルガン(まよなか)",
+  "Lycanroc-Dusk": "ルガルガン(たそがれ)",
+
+  "Wishiwashi-School": "ヨワシ(むれた)",
+
+  "Minior": "メテノ",
+  "Minior-Meteor": "メテノ(りゅうせい)",
+
+  "Mimikyu": "ミミッキュ",
+  "Mimikyu-Disguised": "ミミッキュ",
+
+  "Aegislash-Blade": "ギルガルド(ブレード)",
+  "Aegislash-Shield": "ギルガルド(シールド)",
+
+  "Wormadam-Sandy": "ミノマダム(すなち)",
+  "Wormadam-Trash": "ミノマダム(ゴミ)",
+
+  "Cherrim-Sunshine": "チェリム(ポジ)",
+
+  "Castform-Sunny": "ポワルン(たいよう)",
+  "Castform-Rainy": "ポワルン(あまみず)",
+  "Castform-Snowy": "ポワルン(ゆきぐも)",
+
+  "Darmanitan-Galar-Zen": "ダルマッカ(ガラル・ダルマ)",
+  "Darmanitan-Zen": "ヒヒダルマ(ダルマ)",
+  "Darmanitan-Galar": "ガラルヒヒダルマ",
+
+  "Meloetta-Pirouette": "メロエッタ(ステップ)",
+
+  "Keldeo-Resolute": "ケルディオ(かくご)",
+
+  "Hoopa-Unbound": "ときはなフーパ",
+
+  "Floette-Eternal": "フラエッテ(えいえんのはな)",
+
+  "Pumpkaboo-Small": "バケッチャ(ちいさい)",
+  "Pumpkaboo-Large": "バケッチャ(おおきい)",
+  "Pumpkaboo-Super": "バケッチャ(とくだい)",
+  "Gourgeist-Small": "パンプジン(ちいさい)",
+  "Gourgeist-Large": "パンプジン(おおきい)",
+  "Gourgeist-Super": "パンプジン(とくだい)",
+
+  "Genesect-Burn": "ゲノセクト(バーンドライブ)",
+  "Genesect-Chill": "ゲノセクト(チルドライブ)",
+  "Genesect-Douse": "ゲノセクト(ダウジングドライブ)",
+  "Genesect-Shock": "ゲノセクト(ショックドライブ)",
+
+  "Vivillon-Fancy": "ビビヨン(ファンシー)",
+  "Vivillon-Pokeball": "ビビヨン(ボール)",
+  "Vivillon-Meadow": "ビビヨン(ていえん)",
+  "Vivillon-Polar": "ビビヨン(ゆきぐに)",
+  "Vivillon-Tundra": "ビビヨン(せつげん)",
+  "Vivillon-Continental": "ビビヨン(たいりく)",
+  "Vivillon-Garden": "ビビヨン(ていえん)",
+  "Vivillon-Elegant": "ビビヨン(みやび)",
+  "Vivillon-Icy-Snow": "ビビヨン(ゆきぐに)",
+  "Vivillon-Modern": "ビビヨン(モダン)",
+  "Vivillon-Marine": "ビビヨン(マリン)",
+  "Vivillon-Archipelago": "ビビヨン(ぐんとう)",
+  "Vivillon-High-Plains": "ビビヨン(こうや)",
+  "Vivillon-Sandstorm": "ビビヨン(さじん)",
+  "Vivillon-River": "ビビヨン(たいが)",
+  "Vivillon-Monsoon": "ビビヨン(スコール)",
+  "Vivillon-Savanna": "ビビヨン(サバンナ)",
+  "Vivillon-Sun": "ビビヨン(たいよう)",
+  "Vivillon-Ocean": "ビビヨン(オーシャン)",
+  "Vivillon-Jungle": "ビビヨン(ジャングル)",
+
+  "_parser_artifacts": "Truncated/odd names produced by upstream parsers — listed here so the viewer doesn't fall back to English.",
+  "Kommo": "ジャラランガ",
+  "Ting": "ディンルー",
+  "Greninja-*": "ゲッコウガ",
+  "Furfrou-Debutante": "トリミアン(レディ)"
+}

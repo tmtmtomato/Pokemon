@@ -1,0 +1,63 @@
+Charizard @ Charizardite Y
+Ability: Solar Power
+Level: 50
+Tera Type: Fire
+EVs: 4 HP / 252 SpA / 252 Spe
+Timid Nature
+- Heat Wave
+- Solar Beam
+- Flamethrower
+- Protect
+
+Venusaur @ Life Orb
+Ability: Overgrow
+Level: 50
+Tera Type: Grass
+EVs: 4 HP / 252 SpA / 252 Spe
+Modest Nature
+- Solar Beam
+- Giga Drain
+- Energy Ball
+- Protect
+
+Incineroar @ Safety Goggles
+Ability: Intimidate
+Level: 50
+EVs: 252 HP / 4 Atk / 252 SpD
+Careful Nature
+- Flare Blitz
+- Knock Off
+- U-turn
+- Crunch
+
+Heatran @ Choice Specs
+Ability: Flash Fire
+Level: 50
+Tera Type: Fire
+EVs: 4 HP / 252 SpA / 252 Spe
+Modest Nature
+- Heat Wave
+- Flamethrower
+- Dark Pulse
+- Protect
+
+Landorus-Therian @ Choice Scarf
+Ability: Intimidate
+Level: 50
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Earthquake
+- Rock Slide
+- U-turn
+- Stone Edge
+
+Cresselia @ Leftovers
+Ability: Levitate
+Level: 50
+Tera Type: Fairy
+EVs: 252 HP / 128 Def / 128 SpD
+Bold Nature
+- Psychic
+- Moonblast
+- Ice Beam
+- Protect

@@ -55,6 +55,13 @@ export function getAbilityBasePowerMod(
     case 'Pixilate':
       if (move.type === 'Normal' && move.category !== 'Status') return MOD.x1_2;
       break;
+    // パンクロック（攻撃側）: 音技のダメージ1.3倍
+    case 'Punk Rock':
+      if (move.flags.sound) return MOD.x1_3;
+      break;
+    // アナライズ: 後攻時ダメージ1.3倍（計算エンジンでは常時適用、UI側で条件制御）
+    case 'Analytic':
+      return MOD.x1_3;
   }
   return MOD.x1_0;
 }
@@ -85,6 +92,10 @@ export function getAbilityAttackMod(
         return 1.5;
       break;
     }
+    // ごりむちゅう: 物理攻撃力1.5倍（こだわりハチマキと同等）
+    case 'Gorilla Tactics':
+      if (move.isPhysical()) return 1.5;
+      break;
   }
   return 1.0;
 }
@@ -143,6 +154,10 @@ export function getAbilityFinalMod(
       case 'Ice Scales':
         if (move.isSpecial()) mod = Math.round(mod * MOD.x0_5 / 4096);
         break;
+      // パンクロック（防御側）: 音技の被ダメージ0.5倍（かたやぶりで貫通される）
+      case 'Punk Rock':
+        if (move.flags.sound) mod = Math.round(mod * MOD.x0_5 / 4096);
+        break;
     }
   }
 
@@ -163,12 +178,53 @@ export function getAbilityFinalMod(
 }
 
 /**
- * Get STAB modifier considering abilities like Adaptability.
+ * Get STAB modifier considering abilities like Adaptability and Terastallization.
  * Returns 4096-based modifier.
+ *
+ * テラスタル時のSTAB計算:
+ * - テラタイプ = 元タイプ = 技タイプ → 2.0x（てきおうりょく: 2.25x）
+ * - テラタイプ = 技タイプ、元タイプ不一致 → 1.5x（てきおうりょく: 2.0x）
+ * - テラスタル後、元タイプの技使用 → 1.5x
+ * - ステラテラ: 初回2.0x、2回目以降は元タイプ一致なら1.5x、不一致なら1.0x
  */
 export function getSTABMod(attacker: Pokemon, moveType: TypeName): number {
-  if (!attacker.hasType(moveType)) return MOD.x1_0;
-  if (attacker.effectiveAbility() === 'Adaptability') return MOD.x2_0;
+  const isAdaptability = attacker.effectiveAbility() === 'Adaptability';
+
+  if (attacker.isTera && attacker.teraType) {
+    // ステラテラ
+    if (attacker.teraType === 'Stellar') {
+      if (attacker.hasOriginalType(moveType)) {
+        // 元タイプ一致の技: 初回2.0x、2回目以降1.5x
+        return attacker.isStellarFirstUse ? MOD.x2_0 : MOD.x1_5;
+      }
+      // 元タイプ不一致: 初回2.0x、2回目以降1.0x
+      return attacker.isStellarFirstUse ? MOD.x2_0 : MOD.x1_0;
+    }
+
+    // 通常テラスタル
+    const teraMatchesMove = attacker.teraType === moveType;
+    const originalMatchesMove = attacker.hasOriginalType(moveType);
+
+    if (teraMatchesMove && originalMatchesMove) {
+      // テラタイプ = 元タイプ = 技タイプ → 2.0x（てきおうりょく: 2.25x）
+      return isAdaptability ? MOD.x2_25 : MOD.x2_0;
+    }
+    if (teraMatchesMove) {
+      // テラタイプ = 技タイプ、元タイプ不一致 → 1.5x（てきおうりょく: 2.0x）
+      return isAdaptability ? MOD.x2_0 : MOD.x1_5;
+    }
+    if (originalMatchesMove) {
+      // テラスタル後、元タイプの技使用 → 1.5x
+      return MOD.x1_5;
+    }
+
+    // 不一致
+    return MOD.x1_0;
+  }
+
+  // 非テラ: 従来通り
+  if (!attacker.hasOriginalType(moveType)) return MOD.x1_0;
+  if (isAdaptability) return MOD.x2_0;
   return MOD.x1_5;
 }
 

@@ -61,6 +61,7 @@ export interface SpeciesData {
   baseStats: StatsTable;
   weightKg: number;
   abilities: string[];
+  isNFE?: boolean;  // 未進化ポケモン (Not Fully Evolved) — しんかのきせき判定用
   mega?: {
     stone: string;
     types: [TypeName] | [TypeName, TypeName];
@@ -169,6 +170,10 @@ export interface PokemonConfig {
   curHP?: number;                  // current HP (percentage 0-100, or absolute)
   boosts?: Partial<StatsTable>;    // stat stages -6 to +6
   isMega?: boolean;
+  // テラスタル関連
+  teraType?: TypeName | 'Stellar';  // テラスタルタイプ
+  isTera?: boolean;                  // テラスタル状態かどうか
+  isStellarFirstUse?: boolean;       // ステラテラ: このタイプの初回使用か
   // For doubles: this pokemon's position
   isSpreadTarget?: boolean;        // is this pokemon the target of a spread move?
 }

@@ -1,0 +1,61 @@
+Kangaskhan @ Kangaskhanite
+Ability: Parental Bond
+Level: 50
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Return
+- Sucker Punch
+- Earthquake
+- Protect
+
+Metagross @ Metagrossite
+Ability: Clear Body
+Level: 50
+Tera Type: Steel
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Iron Head
+- Bullet Punch
+- Earthquake
+- Protect
+
+Incineroar @ Assault Vest
+Ability: Intimidate
+Level: 50
+EVs: 252 HP / 252 Atk / 4 SpD
+Adamant Nature
+- Flare Blitz
+- Knock Off
+- U-turn
+- Crunch
+
+Sylveon @ Choice Specs
+Ability: Pixilate
+Level: 50
+EVs: 252 HP / 252 SpA / 4 SpD
+Modest Nature
+- Hyper Voice
+- Moonblast
+- Psyshock
+- Energy Ball
+
+Landorus-Therian @ Choice Scarf
+Ability: Intimidate
+Level: 50
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Earthquake
+- Rock Slide
+- U-turn
+- Stone Edge
+
+Cresselia @ Leftovers
+Ability: Levitate
+Level: 50
+Tera Type: Fairy
+EVs: 252 HP / 128 Def / 128 SpD
+Bold Nature
+- Psychic
+- Moonblast
+- Ice Beam
+- Protect

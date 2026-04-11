@@ -16,6 +16,11 @@ export class Pokemon {
   readonly boosts: StatsTable;
   readonly isMega: boolean;
 
+  // テラスタル関連
+  readonly teraType: TypeName | 'Stellar' | undefined;
+  readonly isTera: boolean;
+  readonly isStellarFirstUse: boolean;
+
   // Computed
   readonly types: TypeName[];
   readonly rawStats: StatsTable;
@@ -36,6 +41,11 @@ export class Pokemon {
     this.status = config.status;
     this.curHP = config.curHP ?? 100;
     this.isMega = config.isMega ?? false;
+
+    // テラスタル
+    this.teraType = config.teraType;
+    this.isTera = config.isTera ?? false;
+    this.isStellarFirstUse = config.isStellarFirstUse ?? true;
 
     // SP allocation with defaults
     this.sp = {
@@ -92,8 +102,34 @@ export class Pokemon {
     return this.curHP >= 100;
   }
 
-  /** Check if pokemon has a specific type. */
+  /**
+   * Check if pokemon has a specific type.
+   * テラスタル中はテラタイプで判定（ステラは元タイプで判定）。
+   */
   hasType(type: TypeName): boolean {
+    if (this.isTera && this.teraType && this.teraType !== 'Stellar') {
+      return this.teraType === type;
+    }
+    return this.types.includes(type);
+  }
+
+  /**
+   * テラスタル中の有効タイプを返す。
+   * テラスタル中: テラタイプのみ（ステラは元タイプ）。
+   * 非テラ: 元タイプ。
+   */
+  effectiveTypes(): TypeName[] {
+    if (this.isTera && this.teraType && this.teraType !== 'Stellar') {
+      return [this.teraType];
+    }
+    return this.types;
+  }
+
+  /**
+   * 元タイプを持っているか（テラスタル状態に関係なく元タイプを参照）。
+   * テラスタル中でも元タイプのSTABは残る。
+   */
+  hasOriginalType(type: TypeName): boolean {
     return this.types.includes(type);
   }
 
@@ -124,6 +160,9 @@ export class Pokemon {
       curHP: this.curHP,
       boosts: { ...this.boosts },
       isMega: this.isMega,
+      teraType: this.teraType,
+      isTera: this.isTera,
+      isStellarFirstUse: this.isStellarFirstUse,
     });
   }
 }

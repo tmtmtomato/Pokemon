@@ -1,6 +1,13 @@
 node_modules/
 dist/
+build/
 coverage/
+logs/
 *.tsbuildinfo
 .DS_Store
 scripts/.cache/
+scripts/pokesol-*.png
+scripts/pokesol-initial.png
+.claude/
+home-data/storage/
+public/sprites/

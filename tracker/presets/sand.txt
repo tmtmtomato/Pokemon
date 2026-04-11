@@ -1,0 +1,63 @@
+Tyranitar @ Weakness Policy
+Ability: Sand Stream
+Level: 50
+Tera Type: Rock
+EVs: 252 HP / 252 Atk / 4 SpD
+Adamant Nature
+- Rock Slide
+- Crunch
+- Earthquake
+- Protect
+
+Excadrill @ Focus Sash
+Ability: Sand Rush
+Level: 50
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Earthquake
+- Iron Head
+- Rock Slide
+- Protect
+
+Garchomp @ Life Orb
+Ability: Rough Skin
+Level: 50
+Tera Type: Ground
+EVs: 4 HP / 252 Atk / 252 Spe
+Jolly Nature
+- Earthquake
+- Dragon Claw
+- Stone Edge
+- Protect
+
+Cresselia @ Leftovers
+Ability: Levitate
+Level: 50
+Tera Type: Fairy
+EVs: 252 HP / 128 Def / 128 SpD
+Bold Nature
+- Psychic
+- Moonblast
+- Ice Beam
+- Protect
+
+Incineroar @ Safety Goggles
+Ability: Intimidate
+Level: 50
+EVs: 252 HP / 4 Atk / 252 SpD
+Careful Nature
+- Flare Blitz
+- Knock Off
+- U-turn
+- Crunch
+
+Sylveon @ Choice Specs
+Ability: Pixilate
+Level: 50
+Tera Type: Fairy
+EVs: 252 HP / 252 SpA / 4 SpD
+Modest Nature
+- Hyper Voice
+- Moonblast
+- Psyshock
+- Energy Ball
