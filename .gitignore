@@ -1,6 +1,6 @@
 node_modules/
 dist/
-build/
+build/*
 coverage/
 logs/
 *.tsbuildinfo
@@ -12,5 +12,12 @@ scripts/pokesol-initial.png
 home-data/storage/
 
 # Allow pre-built single-file viewers for GitHub Pages
+!build/calc.html
 !build/firepower.html
+!build/matchup.html
+!build/meta.html
+!build/ml.html
+!build/moves.html
+!build/singles.html
+!build/teams.html
 public/sprites/

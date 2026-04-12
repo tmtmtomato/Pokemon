@@ -5,9 +5,10 @@
 import type { TeamEntry } from "../../types/team-analysis";
 import { useLang } from "../../viewer/LanguageContext";
 import { localizePokemon } from "../../viewer/i18n";
-import { confidenceLabel, fmtPct } from "../utils";
+import { PokemonIcon } from "../../viewer/PokemonIcon";
+import { confidenceLabel, fmtPct, wilsonLower } from "../utils";
 
-export type TeamSort = "count" | "winRate";
+export type TeamSort = "count" | "winRate" | "adjusted";
 
 interface TeamListProps {
   teams: TeamEntry[];
@@ -31,7 +32,7 @@ export function TeamList({ teams, selected, onSelect, sort, onSortChange }: Team
   return (
     <div>
       <div className="flex gap-1 border-b border-gray-800 bg-gray-900/40 px-3 py-1.5">
-        {(["count", "winRate"] as const).map((s) => (
+        {(["count", "winRate", "adjusted"] as const).map((s) => (
           <button
             key={s}
             type="button"
@@ -45,7 +46,9 @@ export function TeamList({ teams, selected, onSelect, sort, onSortChange }: Team
           >
             {s === "count"
               ? lang === "ja" ? "出現数順" : "By Count"
-              : lang === "ja" ? "勝率順" : "By Win Rate"}
+              : s === "winRate"
+                ? lang === "ja" ? "勝率順" : "By Win Rate"
+                : lang === "ja" ? "調整勝率順" : "Adj. Win Rate"}
           </button>
         ))}
       </div>
@@ -53,6 +56,7 @@ export function TeamList({ teams, selected, onSelect, sort, onSortChange }: Team
       {teams.map((team, index) => {
         const isSelected = team.key === selected;
         const badge = confidenceLabel(team.count, lang);
+        const adjWr = sort === "adjusted" ? wilsonLower(team.wins, team.count) : 0;
         return (
           <li key={team.key}>
             <button
@@ -73,18 +77,25 @@ export function TeamList({ teams, selected, onSelect, sort, onSortChange }: Team
                 <span className={`text-xs tabular-nums ${sort === "count" ? "text-gray-300" : "text-gray-500"}`}>
                   {team.count}{lang === "ja" ? "回" : "x"}
                 </span>
-                <span className={`text-xs tabular-nums ${sort === "winRate" ? "text-gray-300" : "text-gray-500"}`}>
+                <span className={`text-xs tabular-nums ${sort === "winRate" || sort === "adjusted" ? "text-gray-300" : "text-gray-500"}`}>
                   wr {fmtPct(team.winRate)}
                 </span>
+                {sort === "adjusted" && (
+                  <span className="text-[10px] tabular-nums text-emerald-400">
+                    adj {fmtPct(adjWr)}
+                  </span>
+                )}
                 {badge && (
                   <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] text-amber-300">
                     {badge}
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[11px] text-gray-200">
+              <div className="flex flex-wrap gap-x-1 gap-y-0.5 text-[11px] text-gray-200 items-center">
                 {team.species.map((sp) => (
-                  <span key={sp}>{localizePokemon(sp, lang)}</span>
+                  <span key={sp} className="inline-flex items-center">
+                    <PokemonIcon name={sp} size="w-5 h-5" />
+                  </span>
                 ))}
               </div>
             </button>

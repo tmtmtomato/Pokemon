@@ -10,10 +10,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { TeamAnalysis } from "../types/team-analysis";
 import teamsJson from "../storage/analysis/2026-04-10-teams.json";
 import { TeamsToolbar, type Tab } from "./components/TeamsToolbar";
-import { TeamList } from "./components/TeamList";
+import { TeamList, type TeamSort } from "./components/TeamList";
 import { TeamDetail } from "./components/TeamDetail";
 import { CoreList } from "./components/CoreList";
 import { CoreDetail } from "./components/CoreDetail";
+import { wilsonLower } from "./utils";
 
 const DATA: TeamAnalysis = teamsJson as unknown as TeamAnalysis;
 
@@ -22,8 +23,7 @@ export default function App() {
   const [dark, setDark] = useState(true);
 
   // Team tab state
-  type TeamSort = "count" | "winRate";
-  const [teamSort, setTeamSort] = useState<TeamSort>("count");
+  const [teamSort, setTeamSort] = useState<TeamSort>("adjusted");
   const [selectedTeamKey, setSelectedTeamKey] = useState<string | undefined>(
     () => DATA.teams[0]?.key,
   );
@@ -50,6 +50,13 @@ export default function App() {
   const sortedTeams = useMemo(() => {
     if (teamSort === "winRate") {
       return [...DATA.teams].sort((a, b) => b.winRate - a.winRate || b.count - a.count);
+    }
+    if (teamSort === "adjusted") {
+      return [...DATA.teams].sort((a, b) => {
+        const wa = wilsonLower(a.wins, a.count);
+        const wb = wilsonLower(b.wins, b.count);
+        return wb - wa || b.count - a.count;
+      });
     }
     return DATA.teams; // already sorted by count
   }, [teamSort]);

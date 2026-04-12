@@ -3,10 +3,115 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Champions ダメージ計算機</title>
+  <title>Pokemon Champions Tools</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #030712; color: #e5e7eb; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    header { padding: 2.5rem 1rem 1rem; text-align: center; }
+    header h1 { font-size: 1.5rem; font-weight: 700; color: #f9fafb; }
+    header p { font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem; }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 0.75rem; max-width: 900px; width: 100%; padding: 1rem 1.5rem;
+    }
+    a.card {
+      display: flex; flex-direction: column; gap: 0.25rem;
+      background: #111827; border: 1px solid #1f2937; border-radius: 0.5rem;
+      padding: 1rem 1.25rem; text-decoration: none; color: inherit;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    a.card:hover { border-color: #3b82f6; background: #1e293b; }
+    .card-title { font-size: 0.9rem; font-weight: 600; color: #f9fafb; }
+    .card-desc { font-size: 0.7rem; color: #9ca3af; line-height: 1.4; }
+    .badge {
+      display: inline-block; font-size: 0.6rem; font-weight: 500;
+      padding: 0.1rem 0.4rem; border-radius: 0.25rem; margin-left: 0.4rem;
+    }
+    .badge-new { background: #064e3b; color: #6ee7b7; }
+    .badge-ml { background: #312e81; color: #a5b4fc; }
+    footer {
+      margin-top: auto; padding: 1.5rem; text-align: center;
+      font-size: 0.65rem; color: #4b5563;
+    }
+  </style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen">
-  <div id="root"></div>
-  <script type="module" src="/app/main.tsx"></script>
+<body>
+  <header>
+    <h1>Pokemon Champions Tools</h1>
+    <p>VGC Doubles analysis &amp; simulation tools — all client-side, no server required</p>
+  </header>
+
+  <div class="grid">
+    <a class="card" href="build/teams.html">
+      <span class="card-title">
+        Team Analysis
+        <span class="badge badge-new">NEW</span>
+      </span>
+      <span class="card-desc">
+        Wilson信頼度調整済み勝率ランキング。25,000+リプレイから構築別の勝率・選出パターンを分析。
+      </span>
+    </a>
+
+    <a class="card" href="build/ml.html">
+      <span class="card-title">
+        ML Insights
+        <span class="badge badge-ml">ML</span>
+      </span>
+      <span class="card-desc">
+        GBDTモデルによるチーム評価・技選択品質・悪手パターン検出。3モデルの統合分析。
+      </span>
+    </a>
+
+    <a class="card" href="build/matchup.html">
+      <span class="card-title">Team Matchup Simulator</span>
+      <span class="card-desc">
+        10,000ランダムチーム×ダメージシミュレーション。構築のマッチアップ分布を可視化。
+      </span>
+    </a>
+
+    <a class="card" href="build/moves.html">
+      <span class="card-title">Move Consistency</span>
+      <span class="card-desc">
+        技のダメージ一貫性分析。個体・チーム・脅威の3モードで技マトリクスを確認。
+      </span>
+    </a>
+
+    <a class="card" href="build/meta.html">
+      <span class="card-title">Meta Viewer</span>
+      <span class="card-desc">
+        使用率・勝率分布、マッチアップ相性表。Pikalytics系メタ統計ビューア。
+      </span>
+    </a>
+
+    <a class="card" href="build/calc.html">
+      <span class="card-title">Damage Calculator</span>
+      <span class="card-desc">
+        SP制ダメージ計算機。テラスタル・メガシンカ・天候・フィールド対応。
+      </span>
+    </a>
+
+    <a class="card" href="build/firepower.html">
+      <span class="card-title">Firepower Rankings</span>
+      <span class="card-desc">
+        攻撃性能ランキング。メタ全体での最大火力・一貫性を評価。
+      </span>
+    </a>
+
+    <a class="card" href="build/singles.html">
+      <span class="card-title">Singles Matchup</span>
+      <span class="card-desc">
+        シングルバトル1v1マッチアップ表。全組み合わせのダメージ/KO計算。
+      </span>
+    </a>
+  </div>
+
+  <footer>
+    Pokemon Champions VGC Tools &mdash; Data: vgcpast.es &mdash;
+    <a href="https://github.com/tmtmtomato/Pokemon" style="color:#6b7280;">GitHub</a>
+  </footer>
 </body>
 </html>

@@ -51,6 +51,27 @@ export function fmtPct(value: number, digits = 1): string {
   return `${value.toFixed(digits)}%`;
 }
 
+/**
+ * Wilson Score Lower Bound (95% confidence).
+ *
+ * Returns the lower bound of the confidence interval for observed win rate,
+ * penalizing small sample sizes. Ideal for ranking items by "true" quality.
+ *
+ * @param wins  Number of wins
+ * @param n     Total games played
+ * @returns     Lower bound as percentage (0-100)
+ */
+export function wilsonLower(wins: number, n: number): number {
+  if (n === 0) return 0;
+  const z = 1.96; // 95% confidence
+  const p = wins / n;
+  const z2 = z * z;
+  const denom = 1 + z2 / n;
+  const centre = p + z2 / (2 * n);
+  const spread = z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n));
+  return ((centre - spread) / denom) * 100;
+}
+
 /** Deviation label for co-selection rate vs 40% random baseline. */
 export function coSelLabel(
   rate: number,

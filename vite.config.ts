@@ -28,7 +28,7 @@ export default defineConfig({
                     ? { firepower: 'firepower.html' }
                     : entry === 'ml'
                     ? { ml: 'ml.html' }
-                    : { calc: 'index.html' },
+                    : { calc: 'calc.html' },
     },
   },
 });
