@@ -70,19 +70,14 @@ export interface SlotInference {
  */
 export const ATTACKER_DAMAGE_ITEMS = [
   '', // No item / non-damage item
-  'Choice Band',
-  'Choice Specs',
-  'Life Orb',
-  'Expert Belt',
-  'Muscle Band',   // L-3: 1.1x physical
-  'Wise Glasses',  // L-3: 1.1x special
+  // Champions has no generic attack-boosting items (no Choice Band/Specs/Life Orb)
+  // Type-boost items are handled separately via TYPE_BOOST_ITEMS
 ] as const;
 
 /** Items that affect damage when held by defender */
 export const DEFENDER_DAMAGE_ITEMS = [
   '', // No item / non-damage item
-  'Assault Vest',
-  'Eviolite',
+  // Champions has no defensive damage items (no Assault Vest/Eviolite)
 ] as const;
 
 /** Type-boosting items mapped to the type they boost */

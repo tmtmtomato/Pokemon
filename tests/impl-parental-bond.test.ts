@@ -160,32 +160,6 @@ describe('おやこあい (Parental Bond)', () => {
 
   // === 他の修正値との組み合わせテスト ===
 
-  it('Life Orb + おやこあいで正しく計算される', () => {
-    // Life Orb有り + Parental Bond
-    const pbLifeOrb = new Pokemon({
-      name: 'Kangaskhan', sp: { atk: 32 }, nature: 'Adamant',
-      ability: 'Parental Bond', item: 'Life Orb',
-    });
-    // Life Orb有り + Parental Bond無し
-    const noAbilityLifeOrb = new Pokemon({
-      name: 'Kangaskhan', sp: { atk: 32 }, nature: 'Adamant',
-      ability: 'Scrappy', item: 'Life Orb',
-    });
-    const defender = new Pokemon({ name: 'Garchomp', sp: { hp: 32, def: 32 } });
-    const move = new Move('Return');
-    const field = new Field({ gameType: 'Singles' });
-
-    const rollsWithPB = calculateDamage(pbLifeOrb, defender, move.clone(), field).rolls;
-    const rollsWithout = calculateDamage(noAbilityLifeOrb, defender, move.clone(), field).rolls;
-
-    // Life Orb適用後のダメージに対して Parental Bond の2撃目が加算される
-    for (let i = 0; i < 16; i++) {
-      const firstHit = rollsWithout[i]; // Life Orb込みのダメージ
-      const secondHit = Math.max(1, applyMod(firstHit, MOD.x0_25));
-      expect(rollsWithPB[i]).toBe(firstHit + secondHit);
-    }
-  });
-
   it('急所 + おやこあいで正しく計算される', () => {
     const pbCrit = new Pokemon({
       name: 'Kangaskhan', sp: { atk: 32 }, nature: 'Adamant',

@@ -29,7 +29,7 @@ describe('テラスタル STAB テスト', () => {
       nature: 'Adamant',
       ability: 'Sand Veil',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
     const field = new Field({ gameType: 'Singles' });
 
@@ -224,7 +224,7 @@ describe('テラスタル タイプ相性テスト', () => {
       nature: 'Careful',
     });
     const attacker = new Pokemon({
-      name: 'Metagross',
+      name: 'Starmie',
       sp: { spa: 32 },
       nature: 'Modest',
     });
@@ -245,9 +245,9 @@ describe('テラスタル タイプ相性テスト', () => {
 
   // テラスタル防御: テラタイプでの無効タイプが適用される
   it('テラスタル防御: テラタイプでの無効タイプが適用される', () => {
-    // Metagross(Steel/Psychic) テラ Ground: 電気技が無効
+    // Aggron(Steel/Rock) テラ Ground: 電気技が無効
     const teraDefender = new Pokemon({
-      name: 'Metagross',
+      name: 'Aggron',
       sp: { hp: 32, spd: 32 },
       nature: 'Careful',
       isTera: true,
@@ -360,7 +360,7 @@ describe('ステラテラテスト', () => {
       nature: 'Careful',
     });
     const attacker = new Pokemon({
-      name: 'Metagross',
+      name: 'Starmie',
       sp: { spa: 32 },
       nature: 'Modest',
     });
@@ -472,7 +472,7 @@ describe('テラスタル統合テスト', () => {
       teraType: 'Ground',
     });
     const defender = new Pokemon({
-      name: 'Metagross',
+      name: 'Excadrill',
       sp: { hp: 32, def: 32 },
       nature: 'Impish',
     });
@@ -480,16 +480,16 @@ describe('テラスタル統合テスト', () => {
     const field = new Field({ gameType: 'Singles' });
 
     const result = calculate(teraAttacker, defender, move, field);
-    // Ground vs Steel/Psychic = 2x, STAB 2.0x（テラ一致）
+    // Ground vs Ground/Steel = 2x, STAB 2.0x（テラ一致）
     expect(result.typeEffectiveness).toBe(2);
     expect(result.range()[0]).toBeGreaterThan(0);
   });
 
   it('テラスタル防御側 + 攻撃側の組み合わせ', () => {
-    // 攻撃: Metagross → Ice Beam
+    // 攻撃: Starmie → Ice Beam
     // 防御: Garchomp テラ Water（氷→水は半減になる、元は4倍弱点）
     const attacker = new Pokemon({
-      name: 'Metagross',
+      name: 'Starmie',
       sp: { spa: 32 },
       nature: 'Modest',
     });
@@ -517,7 +517,7 @@ describe('テラスタル統合テスト', () => {
       ability: 'Sand Veil',
     });
     const defender = new Pokemon({
-      name: 'Metagross',
+      name: 'Excadrill',
       sp: { hp: 32, def: 32 },
       nature: 'Impish',
     });

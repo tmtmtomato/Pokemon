@@ -48,14 +48,11 @@ describe('Audit D: Ability BP modifiers', () => {
 
   // D3: Sheer Force (secondary effect -> ~1.3x)
   it('D3: Sheer Force boosts Iron Head (~1.3x)', () => {
-    // Need a pokemon with Sheer Force... checking data
-    // Mawile has Sheer Force? Let me check what's available
-    // Using a generic approach: set ability directly
     const sf = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sheer Force',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sheer Force',
     });
     const noSF = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Clear Body',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Rush',
     });
     const defender = new Pokemon({ name: 'Garchomp', sp: { hp: 32, def: 32 } });
     const move = new Move('Iron Head'); // has secondaryEffect: true
@@ -71,10 +68,10 @@ describe('Audit D: Ability BP modifiers', () => {
   // D4: Iron Fist (punch -> 1.2x)
   it('D4: Iron Fist boosts Bullet Punch by ~1.2x', () => {
     const ifist = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Iron Fist',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Iron Fist',
     });
     const noIF = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Clear Body',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Rush',
     });
     const defender = new Pokemon({ name: 'Garchomp', sp: { hp: 32, def: 32 } });
     const move = new Move('Bullet Punch');
@@ -95,7 +92,7 @@ describe('Audit D: Ability BP modifiers', () => {
     const noReckless = new Pokemon({
       name: 'Emboar', sp: { atk: 32 }, nature: 'Adamant', ability: 'Blaze',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Flare Blitz');
     const field = new Field({ gameType: 'Singles' });
 
@@ -114,7 +111,7 @@ describe('Audit D: Ability BP modifiers', () => {
     const noSJ = new Pokemon({
       name: 'Tyranitar', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Stream',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Crunch');
     const field = new Field({ gameType: 'Singles' });
 
@@ -147,10 +144,10 @@ describe('Audit D: Ability BP modifiers', () => {
   // D8: Tough Claws (contact -> ~1.3x)
   it('D8: Tough Claws boosts Close Combat by ~1.3x', () => {
     const tc = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Tough Claws',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Tough Claws',
     });
     const noTC = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Clear Body',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Rush',
     });
     const defender = new Pokemon({ name: 'Tyranitar', sp: { hp: 32, def: 32 } });
     const move = new Move('Close Combat');
@@ -171,7 +168,7 @@ describe('Audit D: Ability BP modifiers', () => {
     const noSharp = new Pokemon({
       name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Veil',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Shadow Claw');
     const field = new Field({ gameType: 'Singles' });
 
@@ -231,12 +228,11 @@ describe('Audit D: Ability stat modifiers', () => {
 
   // D13: Huge Power (physical Atk 2x)
   it('D13: Huge Power doubles physical Atk', () => {
-    // Using Metagross with Huge Power (custom ability assignment)
     const hp = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Huge Power',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Huge Power',
     });
     const noHP = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Clear Body',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Rush',
     });
     const defender = new Pokemon({ name: 'Garchomp', sp: { hp: 32, def: 32 } });
     const move = new Move('Iron Head');
@@ -257,7 +253,7 @@ describe('Audit D: Ability stat modifiers', () => {
     const noGuts = new Pokemon({
       name: 'Emboar', sp: { atk: 32 }, nature: 'Adamant', ability: 'Blaze',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Close Combat');
     const field = new Field({ gameType: 'Singles' });
 
@@ -272,7 +268,7 @@ describe('Audit D: Ability stat modifiers', () => {
   });
 
   // D15: Solar Power (SpA 1.5x in Sun ONLY)
-  // ★ This tests a suspected bug: Solar Power should only activate in Sun
+  // This tests a suspected bug: Solar Power should only activate in Sun
   it('D15: Solar Power boosts SpA only in Sun (BUG CHECK)', () => {
     const sp = new Pokemon({
       name: 'Charizard', sp: { spa: 32 }, nature: 'Modest', ability: 'Solar Power',
@@ -295,7 +291,7 @@ describe('Audit D: Ability stat modifiers', () => {
     const spNone = calculate(sp, defender, move, fieldNone);
     const noSPNone = calculate(noSP, defender, move, fieldNone);
 
-    // ★ BUG: If Solar Power activates without Sun, this will fail
+    // BUG: If Solar Power activates without Sun, this will fail
     expect(spNone.range()[0]).toBe(noSPNone.range()[0]);
   });
 });
@@ -345,14 +341,15 @@ describe('Audit D: Ability final modifiers (defender)', () => {
 
   // D17: Filter / Solid Rock (SE -> 0.75x)
   it('D17: Filter reduces super effective damage by 0.75x', () => {
+    // Excadrill is Ground/Steel, weak to Fire (2x), Fighting (2x), Ground (2x), Water (2x)
     const filter = new Pokemon({
-      name: 'Metagross', sp: { hp: 32, def: 32 }, nature: 'Impish', ability: 'Filter',
+      name: 'Excadrill', sp: { hp: 32, def: 32 }, nature: 'Impish', ability: 'Filter',
     });
     const noFilter = new Pokemon({
-      name: 'Metagross', sp: { hp: 32, def: 32 }, nature: 'Impish', ability: 'Clear Body',
+      name: 'Excadrill', sp: { hp: 32, def: 32 }, nature: 'Impish', ability: 'Sand Rush',
     });
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const move = new Move('Earthquake'); // Ground vs Steel/Psychic = 2x SE
+    const move = new Move('Earthquake'); // Ground vs Ground/Steel = 2x SE (Ground vs Steel = 2x, Ground vs Ground = 1x)
     const field = new Field({ gameType: 'Singles' });
 
     const vsFilter = calculate(attacker, filter, move, field);
@@ -458,7 +455,6 @@ describe('Audit D: Ability final modifiers (defender)', () => {
     const noMBResult = calculate(noMB, ms, move, field);
 
     // Mold Breaker should ignore Multiscale, so more damage
-    // Note: Mega Emboar has different base stats, so direct comparison is tricky
     // Instead, verify that MB vs Multiscale deals the same as MB vs Inner Focus
     const noMS = new Pokemon({
       name: 'Dragonite', sp: { hp: 32, def: 32 }, nature: 'Impish', ability: 'Inner Focus',
@@ -514,22 +510,22 @@ describe('Audit D: Ability final modifiers (attacker)', () => {
   // D22: Neuroforce (SE -> 1.25x)
   it('D22: Neuroforce adds 1.25x on super effective hits', () => {
     const nf = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Neuroforce',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Neuroforce',
     });
     const noNF = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Clear Body',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Rush',
     });
     const defender = new Pokemon({ name: 'Garchomp', sp: { hp: 32, def: 32 } });
-    const move = new Move('Iron Head'); // Steel vs Fairy? No. Steel vs Dragon is 0.5x...
-    // Need SE: Metagross using... Ice Beam? No, physical.
-    // Actually let's use Bullet Punch: Steel vs Fairy. Garchomp is Dragon/Ground.
-    // Steel vs Dragon = 0.5x, Steel vs Ground = 1x -> 0.5x total (NVE, not SE)
-    // Need a SE matchup. Garchomp is Dragon/Ground, weak to Ice(4x), Dragon(2x), Fairy(2x)
-    // Use Dragon Claw: Dragon vs Dragon/Ground = 2x vs Dragon, 1x vs Ground = 2x total
-    const dragonClaw = new Move('Dragon Claw');
+    // Need SE: Dragon Claw? No, Excadrill is not Dragon.
+    // Excadrill using Iron Head vs Garchomp: Steel vs Dragon = 0.5x, Steel vs Ground = 1x -> 0.5x (NVE)
+    // Use Earthquake: Ground vs Dragon = 1x, Ground vs Ground = 1x -> 1x (neutral)
+    // We need a SE matchup. Let's use a different defender.
+    // Tyranitar: Rock/Dark. Ground vs Rock = 2x, Ground vs Dark = 1x -> 2x SE
+    const seDef = new Pokemon({ name: 'Tyranitar', sp: { hp: 32, def: 32 } });
+    const dragonClaw = new Move('Earthquake');
 
-    const nfResult = calculate(nf, defender, dragonClaw, new Field({ gameType: 'Singles' }));
-    const noNFResult = calculate(noNF, defender, dragonClaw, new Field({ gameType: 'Singles' }));
+    const nfResult = calculate(nf, seDef, dragonClaw, new Field({ gameType: 'Singles' }));
+    const noNFResult = calculate(noNF, seDef, dragonClaw, new Field({ gameType: 'Singles' }));
 
     const ratio = damageRatio(nfResult, noNFResult);
     expect(ratio).toBeCloseTo(1.25, 0);
@@ -567,15 +563,8 @@ describe('Audit D: Ability final modifiers (attacker)', () => {
     const noMegaSol = new Pokemon({
       name: 'Meganium', sp: { spa: 32 }, nature: 'Modest', ability: 'Overgrow',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, spd: 32 } });
-    // Use Solar Beam (Grass) to test - actually Mega Sol affects fire/water weather check
-    // In Sun, Fire gets 1.5x, Water gets 0.5x
-    // Meganium with Mega Sol using Energy Ball (Grass)... this doesn't test weather
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, spd: 32 } });
     // The Sun effect would be on fire moves. But Meganium doesn't have fire moves.
-    // Actually Mega Sol makes ALL moves act as if in Sun for the user
-    // This means if Mega Sol Meganium uses a fire move hypothetically, it gets Sun boost
-    // More practically: Sun weakens Water moves. If Mega Sol user uses Surf, it should be 0.5x
-    // But Mega Sol Meganium probably doesn't have Surf either
     // Let's just verify the weather function returns Sun for Mega Sol
     expect(megaSol.effectiveAbility()).toBe('Mega Sol');
   });
@@ -587,12 +576,12 @@ describe('Audit D: Type-changing abilities', () => {
   it('D11: Dragonize changes Normal to Dragon and boosts 1.2x', () => {
     const dragonize = new Pokemon({
       name: 'Feraligatr', sp: { atk: 32 }, nature: 'Adamant',
-      item: 'Feraligatrite', isMega: true, // Dragonize
+      item: 'Feraligite', isMega: true, // Dragonize
     });
     const noDragonize = new Pokemon({
       name: 'Feraligatr', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sheer Force',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Return'); // Normal 102 BP
 
     const drResult = calculate(dragonize, defender, move, new Field({ gameType: 'Singles' }));
@@ -600,9 +589,9 @@ describe('Audit D: Type-changing abilities', () => {
 
     // Dragonize: Return becomes Dragon type
     expect(drResult.moveType).toBe('Dragon');
-    // Normal Return vs Steel/Psychic = 0.5x (Normal vs Steel)
-    // Dragon Return vs Steel/Psychic = 0.5x (Dragon vs Steel)
-    // Both 0.5x, but Dragon gets STAB (Feraligatr-Mega is Water/Dragon) + 1.2x BP boost
+    // Normal Return vs Ground/Steel = 1x
+    // Dragon Return vs Ground/Steel = 1x (Dragon vs Ground = 1x, Dragon vs Steel = 0.5x -> 0.5x total actually)
+    // But Dragon gets STAB (Feraligatr-Mega is Water/Dragon) + 1.2x BP boost
   });
 
   // D12: Pixilate (Normal -> Fairy + 1.2x)

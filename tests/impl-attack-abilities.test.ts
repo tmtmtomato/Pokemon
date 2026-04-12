@@ -16,7 +16,7 @@ describe('Gorilla Tactics（ごりむちゅう）', () => {
     const withoutGT = new Pokemon({
       name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Veil',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
     const field = new Field({ gameType: 'Singles' });
 
@@ -34,7 +34,7 @@ describe('Gorilla Tactics（ごりむちゅう）', () => {
     const withoutGT = new Pokemon({
       name: 'Garchomp', sp: { spa: 32 }, nature: 'Modest', ability: 'Sand Veil',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, spd: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, spd: 32 } });
     const move = new Move('Flamethrower');
     const field = new Field({ gameType: 'Singles' });
 
@@ -44,24 +44,24 @@ describe('Gorilla Tactics（ごりむちゅう）', () => {
     expect(gtResult.range()[0]).toBe(noGTResult.range()[0]);
   });
 
-  it('ごりむちゅう: こだわりハチマキと重複して適用される', () => {
-    const gtWithBand = new Pokemon({
+  it('ごりむちゅう: タイプ強化アイテムと重複して適用される', () => {
+    const gtWithItem = new Pokemon({
       name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant',
-      ability: 'Gorilla Tactics', item: 'Choice Band',
+      ability: 'Gorilla Tactics', item: 'Soft Sand',
     });
-    const bandOnly = new Pokemon({
+    const itemOnly = new Pokemon({
       name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant',
-      ability: 'Sand Veil', item: 'Choice Band',
+      ability: 'Sand Veil', item: 'Soft Sand',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
     const field = new Field({ gameType: 'Singles' });
 
-    const gtBandResult = calculate(gtWithBand, defender, move, field);
-    const bandResult = calculate(bandOnly, defender, move, field);
+    const gtItemResult = calculate(gtWithItem, defender, move, field);
+    const itemResult = calculate(itemOnly, defender, move, field);
 
-    // ごりむちゅう（1.5倍）がこだわりハチマキ（1.5倍）に追加で乗る
-    const ratio = damageRatio(gtBandResult, bandResult);
+    // ごりむちゅう（1.5倍）がSoft Sand（1.2倍）に追加で乗る
+    const ratio = damageRatio(gtItemResult, itemResult);
     expect(ratio).toBeCloseTo(1.5, 0);
   });
 });
@@ -164,10 +164,10 @@ describe('Analytic（アナライズ）', () => {
 
   it('アナライズ: ダメージが約1.3倍になる', () => {
     const withAnalytic = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Analytic',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Analytic',
     });
     const withoutAnalytic = new Pokemon({
-      name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Clear Body',
+      name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Rush',
     });
     const defender = new Pokemon({ name: 'Garchomp', sp: { hp: 32, def: 32 } });
     const move = new Move('Iron Head');

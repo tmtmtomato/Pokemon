@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { calculate, Pokemon, Move, Field } from '../src/index.js';
 
 describe('Basic damage calculation', () => {
-  it('Garchomp Earthquake vs Metagross (no modifiers, singles)', () => {
+  it('Garchomp Earthquake vs Excadrill (no modifiers, singles)', () => {
     const attacker = new Pokemon({
       name: 'Garchomp',
       sp: { atk: 32 },
@@ -10,10 +10,10 @@ describe('Basic damage calculation', () => {
       ability: 'Sand Veil',
     });
     const defender = new Pokemon({
-      name: 'Metagross',
+      name: 'Excadrill',
       sp: { hp: 32, def: 32 },
       nature: 'Impish',
-      ability: 'Clear Body',
+      ability: 'Sand Rush',
     });
     const move = new Move('Earthquake');
     const field = new Field({ gameType: 'Singles' });
@@ -21,16 +21,10 @@ describe('Basic damage calculation', () => {
     const result = calculate(attacker, defender, move, field);
     const [min, max] = result.range();
 
-    // Ground vs Steel/Psychic: 1x (Ground is 0.5x vs Steel but Psychic is neutral... wait)
-    // Actually: Ground vs Steel = 2x, Ground vs Psychic = 1x -> 2x total
+    // Ground vs Ground/Steel: Ground→Ground=1x, Ground→Steel=2x -> 2x total
     expect(result.typeEffectiveness).toBe(2);
 
-    // Verify damage is reasonable
-    // Atk: calcStat(130, 32, 1.1) = 200
-    // Def: calcStat(130, 32, 1.1) = 200 (Impish boosts Def)
-    // Base: floor(floor(22 * 100 * 200 / 200) / 50 + 2) = floor(2200/50 + 2) = floor(44+2) = 46
-    // No STAB for Ground on Dragon/Ground Garchomp... wait, Garchomp IS Ground type
-    // STAB: 1.5x. Type: 2x. So damage range: 46 * random * 1.5 * 2
+    // Verify damage is reasonable: STAB 1.5x, Type 2x
     expect(min).toBeGreaterThan(0);
     expect(max).toBeGreaterThan(min);
     expect(result.rolls).toHaveLength(16);
@@ -52,7 +46,7 @@ describe('Basic damage calculation', () => {
 
   it('Status move deals 0 damage', () => {
     const attacker = new Pokemon({ name: 'Garchomp' });
-    const defender = new Pokemon({ name: 'Metagross' });
+    const defender = new Pokemon({ name: 'Excadrill' });
     const move = new Move('Swords Dance');
 
     const result = calculate(attacker, defender, move);
@@ -63,7 +57,7 @@ describe('Basic damage calculation', () => {
 describe('Weather modifiers', () => {
   it('Fire move in Sun does 1.5x damage', () => {
     const attacker = new Pokemon({ name: 'Charizard', sp: { spa: 32 }, nature: 'Modest' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, spd: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, spd: 32 } });
     const move = new Move('Flamethrower');
 
     const noWeather = calculate(attacker, defender, move, new Field({ gameType: 'Singles' }));
@@ -131,7 +125,7 @@ describe('STAB', () => {
 describe('Screens', () => {
   it('Reflect halves physical damage in singles', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
 
     const noScreen = calculate(attacker, defender, move, new Field({ gameType: 'Singles' }));
@@ -308,32 +302,32 @@ describe('Special moves', () => {
 });
 
 describe('Items', () => {
-  it('Choice Band boosts physical damage by 1.5x', () => {
-    const withBand = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant', item: 'Choice Band' });
-    const noBand = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+  it('Soft Sand boosts Ground-type damage by ~1.2x', () => {
+    const withItem = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant', item: 'Soft Sand' });
+    const noItem = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
     const field = new Field({ gameType: 'Singles' });
 
-    const withBandResult = calculate(withBand, defender, move, field);
-    const noBandResult = calculate(noBand, defender, move, field);
+    const withItemResult = calculate(withItem, defender, move, field);
+    const noItemResult = calculate(noItem, defender, move, field);
 
-    expect(withBandResult.range()[0]).toBeGreaterThan(noBandResult.range()[0]);
-    // Approximately 1.5x
-    expect(withBandResult.range()[0] / noBandResult.range()[0]).toBeCloseTo(1.5, 0);
+    expect(withItemResult.range()[0]).toBeGreaterThan(noItemResult.range()[0]);
+    // Approximately 1.2x (4915/4096)
+    expect(withItemResult.range()[0] / noItemResult.range()[0]).toBeCloseTo(1.2, 0);
   });
 
-  it('Life Orb boosts damage by ~1.3x', () => {
-    const withOrb = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant', item: 'Life Orb' });
-    const noOrb = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Incineroar', sp: { hp: 32, def: 32 } });
-    const move = new Move('Earthquake');
+  it('Charcoal boosts Fire-type damage', () => {
+    const withItem = new Pokemon({ name: 'Charizard', sp: { spa: 32 }, nature: 'Modest', item: 'Charcoal' });
+    const noItem = new Pokemon({ name: 'Charizard', sp: { spa: 32 }, nature: 'Modest' });
+    const defender = new Pokemon({ name: 'Incineroar', sp: { hp: 32, spd: 32 } });
+    const move = new Move('Flamethrower');
     const field = new Field({ gameType: 'Singles' });
 
-    const withOrbResult = calculate(withOrb, defender, move, field);
-    const noOrbResult = calculate(noOrb, defender, move, field);
+    const withItemResult = calculate(withItem, defender, move, field);
+    const noItemResult = calculate(noItem, defender, move, field);
 
-    expect(withOrbResult.range()[0]).toBeGreaterThan(noOrbResult.range()[0]);
+    expect(withItemResult.range()[0]).toBeGreaterThan(noItemResult.range()[0]);
   });
 
   it('Yache Berry halves super effective Ice damage', () => {
@@ -355,7 +349,7 @@ describe('Burn', () => {
   it('Burn halves physical damage', () => {
     const burned = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant', status: 'brn' });
     const healthy = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
     const field = new Field({ gameType: 'Singles' });
 
@@ -370,7 +364,7 @@ describe('Burn', () => {
 describe('Critical hits', () => {
   it('Critical hit does 1.5x damage', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const normal = new Move('Earthquake');
     const crit = new Move('Earthquake', { isCrit: true });
     const field = new Field({ gameType: 'Singles' });
@@ -383,7 +377,7 @@ describe('Critical hits', () => {
 
   it('Critical hit ignores Reflect', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const crit = new Move('Earthquake', { isCrit: true });
 
     const noScreen = calculate(attacker, defender, crit, new Field({
@@ -402,7 +396,7 @@ describe('Critical hits', () => {
 describe('Result description', () => {
   it('generates readable description', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
     const field = new Field({ gameType: 'Singles' });
 
@@ -410,7 +404,7 @@ describe('Result description', () => {
     const desc = result.desc();
 
     expect(desc).toContain('Garchomp');
-    expect(desc).toContain('Metagross');
+    expect(desc).toContain('Excadrill');
     expect(desc).toContain('Earthquake');
     expect(desc).toContain('%');
   });
@@ -421,7 +415,7 @@ describe('KO chance', () => {
     // Ice Beam (4x SE) against Garchomp
     const attacker = new Pokemon({
       name: 'Hatterene', sp: { spa: 32 }, nature: 'Modest', ability: 'Magic Bounce',
-      item: 'Choice Specs',
+      item: 'Never-Melt Ice',
     });
     const defender = new Pokemon({ name: 'Garchomp', sp: {} }); // uninvested
     const move = new Move('Ice Beam');
@@ -430,8 +424,7 @@ describe('KO chance', () => {
     const result = calculate(attacker, defender, move, field);
     const ko = result.koChance();
 
-    // 4x SE + STAB (Fairy type doesn't give STAB for Ice)... actually Hatterene is Psychic/Fairy
-    // Ice Beam has no STAB but 4x SE should OHKO uninvested Garchomp
+    // Ice Beam 4x SE + Never-Melt Ice boost should OHKO uninvested Garchomp
     expect(ko.n).toBe(1);
   });
 });

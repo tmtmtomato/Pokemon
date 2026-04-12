@@ -5,7 +5,7 @@ import { calculate, Pokemon, Move, Field } from '../src/index.js';
 describe('Audit B: Core damage formula - hand-calculated verification', () => {
 
   // B1: Base formula: floor(floor(22 * BP * A / D) / 50) + 2
-  it('B1: Base damage matches hand calculation (Garchomp EQ vs Metagross)', () => {
+  it('B1: Base damage matches hand calculation (Garchomp EQ vs Excadrill)', () => {
     // Garchomp: Adamant, 32 SP Atk
     // Base Atk = 130, SP = 32, Nature = 1.1
     // Raw Atk = floor((floor((2*130+31)*50/100) + 5 + 32) * 1.1)
@@ -18,49 +18,44 @@ describe('Audit B: Core damage formula - hand-calculated verification', () => {
     });
     expect(attacker.rawStats.atk).toBe(200);
 
-    // Metagross: Impish (+Def/-SpA), 32 SP HP, 32 SP Def
-    // Base Def = 130, SP = 32, Nature = 1.1
-    // Raw Def = floor((floor((2*130+31)*50/100) + 5 + 32) * 1.1) = 200
+    // Excadrill: Impish (+Def/-SpA), 32 SP HP, 32 SP Def
+    // Base Def = 60, SP = 32, Nature = 1.1
+    // Raw Def = floor((floor((2*60+31)*50/100) + 5 + 32) * 1.1)
+    //         = floor((floor(7550/100) + 37) * 1.1)
+    //         = floor((75 + 37) * 1.1) = floor(123.2) = 123
     const defender = new Pokemon({
-      name: 'Metagross', sp: { hp: 32, def: 32 }, nature: 'Impish', ability: 'Clear Body',
+      name: 'Excadrill', sp: { hp: 32, def: 32 }, nature: 'Impish', ability: 'Sand Rush',
     });
-    expect(defender.rawStats.def).toBe(200);
+    expect(defender.rawStats.def).toBe(123);
 
-    // Metagross HP: floor((2*80+31)*50/100) + 50 + 10 + 32
-    //             = floor(9550/100) + 92 = 95 + 92 = 187
-    expect(defender.rawStats.hp).toBe(187);
+    // Excadrill HP: floor((2*110+31)*50/100) + 50 + 10 + 32
+    //             = floor(12550/100) + 92 = 125 + 92 = 217
+    expect(defender.rawStats.hp).toBe(217);
 
-    // Base damage = floor(floor(22 * 100 * 200 / 200) / 50) + 2
-    //             = floor(floor(440000 / 200) / 50) + 2
-    //             = floor(2200 / 50) + 2
-    //             = floor(44) + 2 = 46
-    // Then: Type effectiveness = 2x (Ground vs Steel/Psychic: 2*1 = 2)
+    // Base damage = floor(floor(22 * 100 * 200 / 123) / 50) + 2
+    //             = floor(floor(440000 / 123) / 50) + 2
+    //             = floor(3577 / 50) + 2
+    //             = floor(71.54) + 2 = 71 + 2 = 73
+    // Type effectiveness = 1x (Ground vs Ground/Steel: 1*2 = 2... wait, Ground vs Steel is 2x, Ground vs Ground is 1x = 2x total)
     // STAB = 1.5x (Garchomp is Dragon/Ground, EQ is Ground)
-    // Singles, no weather, no crit, no burn, no items, no abilities affecting
 
     const move = new Move('Earthquake');
     const field = new Field({ gameType: 'Singles' });
     const result = calculate(attacker, defender, move, field);
 
-    // 16 rolls from 85-100
-    // For roll r: floor(46 * r / 100) * STAB(1.5) * Type(2)
-    // r=85: floor(46*85/100) = floor(39.1) = 39
-    //   -> STAB: applyMod(39, 6144) = pokeRound(39*6144/4096) = pokeRound(58.5) = 58
-    //   -> Type: floor(58 * 2) = 116
-    // r=100: floor(46*100/100) = 46
-    //   -> STAB: applyMod(46, 6144) = pokeRound(46*6144/4096) = pokeRound(69) = 69
-    //   -> Type: floor(69 * 2) = 138
-
     expect(result.rolls).toHaveLength(16);
-    expect(result.rolls[0]).toBe(116);   // r=85
-    expect(result.rolls[15]).toBe(138);  // r=100
     expect(result.typeEffectiveness).toBe(2);
+    // We verify rolls by running the calc engine (exact values depend on rounding chain)
+    // r=85: floor(73*85/100) = 62 -> STAB: applyMod(62, 6144) = pokeRound(62*1.5) = 93 -> Type: 93*2 = 186
+    // r=100: floor(73*100/100) = 73 -> STAB: applyMod(73, 6144) = pokeRound(73*1.5) = pokeRound(109.5) = 109 -> Type: 109*2 = 218
+    expect(result.rolls[0]).toBe(186);   // r=85
+    expect(result.rolls[15]).toBe(218);  // r=100
   });
 
   // B2: All 16 random rolls are distinct and increasing
   it('B2: 16 rolls from 85-100 are non-decreasing', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
     const field = new Field({ gameType: 'Singles' });
 
@@ -74,15 +69,12 @@ describe('Audit B: Core damage formula - hand-calculated verification', () => {
 
   // B3: Minimum damage is 1 (very weak attack)
   it('B3: Minimum damage is 1 even for tiny damage', () => {
-    // Blissey (low Atk base 10) with no SP, no nature vs high Def Corviknight
-    const attacker = new Pokemon({ name: 'Blissey', sp: {}, nature: 'Bold', ability: 'Natural Cure' });
-    // Blissey Atk: floor((floor((2*10+31)*50/100) + 5) * 0.9) = floor((25 + 5) * 0.9) = floor(27) = 27
+    // Snorlax with Bold (-Atk) and no SP Atk vs high Def Corviknight
+    const attacker = new Pokemon({ name: 'Snorlax', sp: {}, nature: 'Bold', ability: 'Immunity' });
     const defender = new Pokemon({
       name: 'Corviknight', sp: { hp: 32, def: 32 }, nature: 'Impish', ability: 'Mirror Armor',
     });
-    // Use a weak Normal move (Return: 102) vs Steel = 0.5x
-    // Actually Corviknight is Flying/Steel. Normal vs Flying = 1, Normal vs Steel = 0.5
-    // = 0.5x total
+    // Return: 102 BP, Normal vs Flying/Steel = 0.5x (Normal vs Steel)
     const move = new Move('Return');
     const field = new Field({ gameType: 'Singles' });
     const result = calculate(attacker, defender, move, field);
@@ -121,19 +113,8 @@ describe('Audit B: Core damage formula - hand-calculated verification', () => {
 
   // B5: Neutral damage (no STAB, no SE) hand calculation
   it('B5: Neutral damage hand calculation (no STAB, no SE)', () => {
-    // Garchomp (Dragon/Ground) using Ice Beam (Ice, Special) vs Incineroar (Fire/Dark)
-    // Wait, Garchomp doesn't learn Ice Beam in our data... let me use a different combo
-    // Metagross (Steel/Psychic) using Earthquake (Ground) vs Incineroar (Fire/Dark)
-    // Ground vs Fire = 2x, Ground vs Dark = 1x -> 2x (not neutral)
-    // Let me find a neutral case:
-    // Kangaskhan (Normal) using Return (Normal, 102 BP) vs Corviknight (Flying/Steel)
-    // Normal vs Flying = 1, Normal vs Steel = 0.5 -> 0.5x (not neutral either)
-    // Garchomp using Dragon Claw (Dragon, 80) vs Incineroar (Fire/Dark) -> Dragon vs Fire = 0.5x, Dragon vs Dark = 1x -> 0.5x
-    // Actually, let me use: Incineroar using Crunch (Dark, 80) vs Corviknight (Flying/Steel)
-    // Dark vs Flying = 1, Dark vs Steel = 1 -> 1x neutral! No STAB (Incineroar is Fire/Dark, Crunch is Dark = STAB!)
-    // Try: Garchomp using Crunch (Dark, 80) vs Corviknight -> no STAB, neutral
-    // Dark vs Flying = 1, Dark vs Steel = 1 -> 1x
-    // Garchomp is Dragon/Ground, Dark is not STAB
+    // Garchomp (Dragon/Ground) using Crunch (Dark) vs Corviknight (Flying/Steel)
+    // Dark vs Flying = 1, Dark vs Steel = 1 -> 1x. No STAB (Garchomp is Dragon/Ground)
     const attacker = new Pokemon({
       name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Veil',
     });

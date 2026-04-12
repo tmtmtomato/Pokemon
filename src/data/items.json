@@ -1,88 +1,20 @@
 {
-  "Choice Band": {
-    "name": "Choice Band",
-    "statBoost": { "stat": "atk", "multiplier": 1.5 },
-    "choiceLock": true
-  },
-  "Choice Specs": {
-    "name": "Choice Specs",
-    "statBoost": { "stat": "spa", "multiplier": 1.5 },
-    "choiceLock": true
-  },
   "Choice Scarf": {
     "name": "Choice Scarf",
     "statBoost": { "stat": "spe", "multiplier": 1.5 },
     "choiceLock": true
   },
-  "Life Orb": {
-    "name": "Life Orb",
-    "conditionalDamage": { "condition": "always", "modifier": 5324 }
-  },
-  "Expert Belt": {
-    "name": "Expert Belt",
-    "conditionalDamage": { "condition": "super_effective", "modifier": 4915 }
-  },
-  "Assault Vest": {
-    "name": "Assault Vest",
-    "statBoost": { "stat": "spd", "multiplier": 1.5 }
-  },
-  "Eviolite": {
-    "name": "Eviolite"
-  },
-  "Leftovers": {
-    "name": "Leftovers"
-  },
-  "Rocky Helmet": {
-    "name": "Rocky Helmet"
-  },
-  "Focus Sash": {
-    "name": "Focus Sash"
-  },
-  "Clear Amulet": {
-    "name": "Clear Amulet"
-  },
-  "Covert Cloak": {
-    "name": "Covert Cloak"
-  },
-  "Safety Goggles": {
-    "name": "Safety Goggles"
-  },
-  "Weakness Policy": {
-    "name": "Weakness Policy"
-  },
-  "Booster Energy": {
-    "name": "Booster Energy"
-  },
-  "Toxic Orb": {
-    "name": "Toxic Orb"
-  },
-  "Flame Orb": {
-    "name": "Flame Orb"
-  },
-  "Mental Herb": {
-    "name": "Mental Herb"
-  },
-  "Light Clay": {
-    "name": "Light Clay"
-  },
-  "Loaded Dice": {
-    "name": "Loaded Dice"
-  },
-  "Scope Lens": {
-    "name": "Scope Lens"
-  },
-  "Throat Spray": {
-    "name": "Throat Spray"
-  },
-  "Protective Pads": {
-    "name": "Protective Pads"
-  },
-  "Shed Shell": {
-    "name": "Shed Shell"
-  },
-  "Wide Lens": {
-    "name": "Wide Lens"
-  },
+  "Focus Sash": { "name": "Focus Sash" },
+  "Leftovers": { "name": "Leftovers" },
+  "Mental Herb": { "name": "Mental Herb" },
+  "Scope Lens": { "name": "Scope Lens" },
+  "Light Ball": { "name": "Light Ball" },
+  "Bright Powder": { "name": "Bright Powder" },
+  "Focus Band": { "name": "Focus Band" },
+  "King's Rock": { "name": "King's Rock" },
+  "Quick Claw": { "name": "Quick Claw" },
+  "Shell Bell": { "name": "Shell Bell" },
+  "White Herb": { "name": "White Herb" },
 
   "Charcoal": {
     "name": "Charcoal",
@@ -157,113 +89,94 @@
     "conditionalDamage": { "condition": "type_match", "modifier": 4915, "type": "Fairy" }
   },
 
-  "Occa Berry": {
-    "name": "Occa Berry",
-    "resistBerry": { "type": "Fire" }
-  },
-  "Passho Berry": {
-    "name": "Passho Berry",
-    "resistBerry": { "type": "Water" }
-  },
-  "Wacan Berry": {
-    "name": "Wacan Berry",
-    "resistBerry": { "type": "Electric" }
-  },
-  "Rindo Berry": {
-    "name": "Rindo Berry",
-    "resistBerry": { "type": "Grass" }
-  },
-  "Yache Berry": {
-    "name": "Yache Berry",
-    "resistBerry": { "type": "Ice" }
-  },
-  "Chople Berry": {
-    "name": "Chople Berry",
-    "resistBerry": { "type": "Fighting" }
-  },
-  "Kebia Berry": {
-    "name": "Kebia Berry",
-    "resistBerry": { "type": "Poison" }
-  },
-  "Shuca Berry": {
-    "name": "Shuca Berry",
-    "resistBerry": { "type": "Ground" }
-  },
-  "Coba Berry": {
-    "name": "Coba Berry",
-    "resistBerry": { "type": "Flying" }
-  },
-  "Payapa Berry": {
-    "name": "Payapa Berry",
-    "resistBerry": { "type": "Psychic" }
-  },
-  "Tanga Berry": {
-    "name": "Tanga Berry",
-    "resistBerry": { "type": "Bug" }
-  },
-  "Charti Berry": {
-    "name": "Charti Berry",
-    "resistBerry": { "type": "Rock" }
-  },
-  "Kasib Berry": {
-    "name": "Kasib Berry",
-    "resistBerry": { "type": "Ghost" }
-  },
-  "Haban Berry": {
-    "name": "Haban Berry",
-    "resistBerry": { "type": "Dragon" }
-  },
-  "Colbur Berry": {
-    "name": "Colbur Berry",
-    "resistBerry": { "type": "Dark" }
-  },
-  "Babiri Berry": {
-    "name": "Babiri Berry",
-    "resistBerry": { "type": "Steel" }
-  },
-  "Roseli Berry": {
-    "name": "Roseli Berry",
-    "resistBerry": { "type": "Fairy" }
-  },
+  "Occa Berry": { "name": "Occa Berry", "resistBerry": { "type": "Fire" } },
+  "Passho Berry": { "name": "Passho Berry", "resistBerry": { "type": "Water" } },
+  "Wacan Berry": { "name": "Wacan Berry", "resistBerry": { "type": "Electric" } },
+  "Rindo Berry": { "name": "Rindo Berry", "resistBerry": { "type": "Grass" } },
+  "Yache Berry": { "name": "Yache Berry", "resistBerry": { "type": "Ice" } },
+  "Chople Berry": { "name": "Chople Berry", "resistBerry": { "type": "Fighting" } },
+  "Kebia Berry": { "name": "Kebia Berry", "resistBerry": { "type": "Poison" } },
+  "Shuca Berry": { "name": "Shuca Berry", "resistBerry": { "type": "Ground" } },
+  "Coba Berry": { "name": "Coba Berry", "resistBerry": { "type": "Flying" } },
+  "Payapa Berry": { "name": "Payapa Berry", "resistBerry": { "type": "Psychic" } },
+  "Tanga Berry": { "name": "Tanga Berry", "resistBerry": { "type": "Bug" } },
+  "Charti Berry": { "name": "Charti Berry", "resistBerry": { "type": "Rock" } },
+  "Kasib Berry": { "name": "Kasib Berry", "resistBerry": { "type": "Ghost" } },
+  "Haban Berry": { "name": "Haban Berry", "resistBerry": { "type": "Dragon" } },
+  "Colbur Berry": { "name": "Colbur Berry", "resistBerry": { "type": "Dark" } },
+  "Babiri Berry": { "name": "Babiri Berry", "resistBerry": { "type": "Steel" } },
+  "Roseli Berry": { "name": "Roseli Berry", "resistBerry": { "type": "Fairy" } },
+  "Chilan Berry": { "name": "Chilan Berry" },
 
-  "Sitrus Berry": {
-    "name": "Sitrus Berry"
-  },
-  "Lum Berry": {
-    "name": "Lum Berry"
-  },
-  "Aguav Berry": {
-    "name": "Aguav Berry"
-  },
+  "Sitrus Berry": { "name": "Sitrus Berry" },
+  "Lum Berry": { "name": "Lum Berry" },
+  "Oran Berry": { "name": "Oran Berry" },
+  "Leppa Berry": { "name": "Leppa Berry" },
+  "Cheri Berry": { "name": "Cheri Berry" },
+  "Chesto Berry": { "name": "Chesto Berry" },
+  "Pecha Berry": { "name": "Pecha Berry" },
+  "Rawst Berry": { "name": "Rawst Berry" },
+  "Aspear Berry": { "name": "Aspear Berry" },
+  "Persim Berry": { "name": "Persim Berry" },
 
-  "Garchompite": { "name": "Garchompite", "megaStone": "Garchomp" },
-  "Metagrossite": { "name": "Metagrossite", "megaStone": "Metagross" },
-  "Kangaskhanite": { "name": "Kangaskhanite", "megaStone": "Kangaskhan" },
-  "Tyranitarite": { "name": "Tyranitarite", "megaStone": "Tyranitar" },
-  "Scizorite": { "name": "Scizorite", "megaStone": "Scizor" },
-  "Lucarionite": { "name": "Lucarionite", "megaStone": "Lucario" },
-  "Gardevoirite": { "name": "Gardevoirite", "megaStone": "Gardevoir" },
+  "Venusaurite": { "name": "Venusaurite", "megaStone": "Venusaur" },
+  "Charizardite X": { "name": "Charizardite X", "megaStone": "Charizard" },
   "Charizardite Y": { "name": "Charizardite Y", "megaStone": "Charizard" },
-  "Meganiumite": { "name": "Meganiumite", "megaStone": "Meganium" },
-  "Feraligatrite": { "name": "Feraligatrite", "megaStone": "Feraligatr" },
-  "Emboarite": { "name": "Emboarite", "megaStone": "Emboar" },
-  "Froslassite": { "name": "Froslassite", "megaStone": "Froslass" },
-  "Dragonitite": { "name": "Dragonitite", "megaStone": "Dragonite" },
+  "Blastoisinite": { "name": "Blastoisinite", "megaStone": "Blastoise" },
+  "Beedrillite": { "name": "Beedrillite", "megaStone": "Beedrill" },
+  "Pidgeotite": { "name": "Pidgeotite", "megaStone": "Pidgeot" },
+  "Alakazite": { "name": "Alakazite", "megaStone": "Alakazam" },
+  "Slowbronite": { "name": "Slowbronite", "megaStone": "Slowbro" },
+  "Gengarite": { "name": "Gengarite", "megaStone": "Gengar" },
+  "Kangaskhanite": { "name": "Kangaskhanite", "megaStone": "Kangaskhan" },
+  "Pinsirite": { "name": "Pinsirite", "megaStone": "Pinsir" },
+  "Gyaradosite": { "name": "Gyaradosite", "megaStone": "Gyarados" },
+  "Aerodactylite": { "name": "Aerodactylite", "megaStone": "Aerodactyl" },
+  "Ampharosite": { "name": "Ampharosite", "megaStone": "Ampharos" },
+  "Steelixite": { "name": "Steelixite", "megaStone": "Steelix" },
+  "Scizorite": { "name": "Scizorite", "megaStone": "Scizor" },
+  "Heracronite": { "name": "Heracronite", "megaStone": "Heracross" },
+  "Houndoominite": { "name": "Houndoominite", "megaStone": "Houndoom" },
+  "Tyranitarite": { "name": "Tyranitarite", "megaStone": "Tyranitar" },
+  "Sablenite": { "name": "Sablenite", "megaStone": "Sableye" },
+  "Aggronite": { "name": "Aggronite", "megaStone": "Aggron" },
+  "Medichamite": { "name": "Medichamite", "megaStone": "Medicham" },
+  "Manectite": { "name": "Manectite", "megaStone": "Manectric" },
+  "Sharpedonite": { "name": "Sharpedonite", "megaStone": "Sharpedo" },
+  "Cameruptite": { "name": "Cameruptite", "megaStone": "Camerupt" },
+  "Altarianite": { "name": "Altarianite", "megaStone": "Altaria" },
+  "Banettite": { "name": "Banettite", "megaStone": "Banette" },
+  "Absolite": { "name": "Absolite", "megaStone": "Absol" },
+  "Glalitite": { "name": "Glalitite", "megaStone": "Glalie" },
+  "Lopunnite": { "name": "Lopunnite", "megaStone": "Lopunny" },
+  "Galladite": { "name": "Galladite", "megaStone": "Gallade" },
+  "Audinite": { "name": "Audinite", "megaStone": "Audino" },
+  "Garchompite": { "name": "Garchompite", "megaStone": "Garchomp" },
+  "Lucarionite": { "name": "Lucarionite", "megaStone": "Lucario" },
   "Abomasite": { "name": "Abomasite", "megaStone": "Abomasnow" },
+  "Gardevoirite": { "name": "Gardevoirite", "megaStone": "Gardevoir" },
 
-  "Air Balloon": { "name": "Air Balloon" },
-  "Black Sludge": { "name": "Black Sludge" },
-  "Eject Button": { "name": "Eject Button" },
-  "Eject Pack": { "name": "Eject Pack" },
-  "Heat Rock": { "name": "Heat Rock" },
-  "Heavy-Duty Boots": { "name": "Heavy-Duty Boots" },
-  "Power Herb": { "name": "Power Herb" },
-  "Red Card": { "name": "Red Card" },
-  "Smooth Rock": { "name": "Smooth Rock" },
-  "Sticky Barb": { "name": "Sticky Barb" },
-  "Wellspring Mask": { "name": "Wellspring Mask" },
-  "Wise Glasses": {
-    "name": "Wise Glasses",
-    "statBoost": { "stat": "spa", "multiplier": 1.1 }
-  }
+  "Clefablite": { "name": "Clefablite", "megaStone": "Clefable" },
+  "Victreebelite": { "name": "Victreebelite", "megaStone": "Victreebel" },
+  "Starminite": { "name": "Starminite", "megaStone": "Starmie" },
+  "Dragoninite": { "name": "Dragoninite", "megaStone": "Dragonite" },
+  "Meganiumite": { "name": "Meganiumite", "megaStone": "Meganium" },
+  "Feraligite": { "name": "Feraligite", "megaStone": "Feraligatr" },
+  "Skarmorite": { "name": "Skarmorite", "megaStone": "Skarmory" },
+  "Chimechite": { "name": "Chimechite", "megaStone": "Chimecho" },
+  "Froslassite": { "name": "Froslassite", "megaStone": "Froslass" },
+  "Emboarite": { "name": "Emboarite", "megaStone": "Emboar" },
+  "Excadrite": { "name": "Excadrite", "megaStone": "Excadrill" },
+  "Chandelurite": { "name": "Chandelurite", "megaStone": "Chandelure" },
+  "Golurkite": { "name": "Golurkite", "megaStone": "Golurk" },
+  "Chesnaughtite": { "name": "Chesnaughtite", "megaStone": "Chesnaught" },
+  "Delphoxite": { "name": "Delphoxite", "megaStone": "Delphox" },
+  "Greninjite": { "name": "Greninjite", "megaStone": "Greninja" },
+  "Floettite": { "name": "Floettite", "megaStone": "Floette" },
+  "Meowsticite": { "name": "Meowsticite", "megaStone": "Meowstic" },
+  "Hawluchanite": { "name": "Hawluchanite", "megaStone": "Hawlucha" },
+  "Crabominite": { "name": "Crabominite", "megaStone": "Crabominable" },
+  "Drampanite": { "name": "Drampanite", "megaStone": "Drampa" },
+  "Scovillainite": { "name": "Scovillainite", "megaStone": "Scovillain" },
+  "Glimmoranite": { "name": "Glimmoranite", "megaStone": "Glimmora" }
 }

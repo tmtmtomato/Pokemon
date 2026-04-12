@@ -13,7 +13,7 @@ describe('Audit F: Special moves', () => {
       name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant',
     });
     const lowAtkDefender = new Pokemon({
-      name: 'Blissey', sp: { hp: 32 }, nature: 'Bold', ability: 'Natural Cure',
+      name: 'Snorlax', sp: { hp: 32 }, nature: 'Bold', ability: 'Immunity',
     });
 
     const move = new Move('Foul Play');
@@ -92,9 +92,9 @@ describe('Audit F: Special moves', () => {
   it('F3: Psyshock targets physical Defense stat', () => {
     // High SpD, low Def defender
     const highSpDLowDef = new Pokemon({
-      name: 'Blissey', sp: { hp: 32, spd: 32 }, nature: 'Calm', ability: 'Natural Cure',
+      name: 'Snorlax', sp: { hp: 32, spd: 32 }, nature: 'Calm', ability: 'Immunity',
     });
-    // Blissey: Def base 10, SpD base 105
+    // Snorlax: Def base 65, SpD base 110
     const move = new Move('Psyshock');
     const psychic = new Move('Psychic');
     const attacker = new Pokemon({ name: 'Hatterene', sp: { spa: 32 }, nature: 'Modest', ability: 'Magic Bounce' });
@@ -238,7 +238,7 @@ describe('Audit I: Burn interactions', () => {
     const healthy = new Pokemon({
       name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
     const field = new Field({ gameType: 'Singles' });
 
@@ -258,7 +258,7 @@ describe('Audit I: Burn interactions', () => {
     const healthy = new Pokemon({
       name: 'Charizard', sp: { spa: 32 }, nature: 'Modest', ability: 'Blaze',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, spd: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, spd: 32 } });
     const move = new Move('Flamethrower'); // Special
     const field = new Field({ gameType: 'Singles' });
 
@@ -276,7 +276,7 @@ describe('Audit I: Burn interactions', () => {
     const gutsHealthy = new Pokemon({
       name: 'Emboar', sp: { atk: 32 }, nature: 'Adamant', ability: 'Guts',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Close Combat');
     const field = new Field({ gameType: 'Singles' });
 

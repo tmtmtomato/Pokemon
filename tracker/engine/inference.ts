@@ -6,7 +6,7 @@
 import type { NatureName, StatID, TypeName, StatsTable } from '../../src/types.js';
 import type { TurnEntry, MyPokemonSlot, OpponentPokemonSlot, FieldSnapshot } from '../hooks/useTracker';
 import type { Candidate, TurnInference } from './inference-types';
-import { ATTACKER_DAMAGE_ITEMS, DEFENDER_DAMAGE_ITEMS, TYPE_BOOST_ITEMS, RESIST_BERRY_TYPES, getDamageTolerance } from './inference-types';
+import { ATTACKER_DAMAGE_ITEMS, TYPE_BOOST_ITEMS, RESIST_BERRY_TYPES, getDamageTolerance } from './inference-types';
 import { calculate, Pokemon, Move, Field } from '../../src/index.js';
 import { getSpecies, getMove } from '../../src/data/index.js';
 import { ALL_NATURES, NATURE_TABLE } from '../../app/lib/constants';
@@ -54,8 +54,7 @@ function getAttackerItems(moveType: TypeName): string[] {
  */
 function getDefenderItems(moveType: TypeName, isSuperEffective: boolean, isNFE: boolean): string[] {
   const items: string[] = [''];
-  items.push('Assault Vest');
-  if (isNFE) items.push('Eviolite');
+  // Champions has no defensive damage items (no Assault Vest/Eviolite)
   // Add resist berry only if the move is super effective
   if (isSuperEffective) {
     for (const [item, type] of Object.entries(RESIST_BERRY_TYPES)) {

@@ -18,7 +18,7 @@ const neutralDefender = () => new Pokemon({
   name: 'Kangaskhan', sp: { hp: 32, def: 32, spd: 32 }, nature: 'Careful',
 });
 const steelAttacker = () => new Pokemon({
-  name: 'Metagross', sp: { atk: 32 }, nature: 'Adamant', ability: 'Clear Body',
+  name: 'Excadrill', sp: { atk: 32 }, nature: 'Adamant', ability: 'Sand Rush',
 });
 
 // =============================================================================

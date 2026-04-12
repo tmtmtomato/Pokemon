@@ -14,7 +14,7 @@ describe('Audit L: Known bugs and edge cases', () => {
     const blaze = new Pokemon({
       name: 'Charizard', sp: { spa: 32 }, nature: 'Modest', ability: 'Blaze',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, spd: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, spd: 32 } });
     const move = new Move('Flamethrower');
 
     // Without any weather
@@ -33,7 +33,7 @@ describe('Audit L: Known bugs and edge cases', () => {
     const blaze = new Pokemon({
       name: 'Charizard', sp: { spa: 32 }, nature: 'Modest', ability: 'Blaze',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, spd: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, spd: 32 } });
     const move = new Move('Flamethrower');
 
     const spRain = calculate(solarPower, defender, move,
@@ -52,7 +52,7 @@ describe('Audit L: Known bugs and edge cases', () => {
     const blaze = new Pokemon({
       name: 'Charizard', sp: { spa: 32 }, nature: 'Modest', ability: 'Blaze',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, spd: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, spd: 32 } });
     const move = new Move('Flamethrower');
 
     const spSun = calculate(solarPower, defender, move,
@@ -74,16 +74,6 @@ describe('Audit L: Known bugs and edge cases', () => {
     expect(pokeRound(1.5)).toBe(1); // 1.5 -> 1 (toward zero)
     expect(pokeRound(2.5)).toBe(2); // 2.5 -> 2 (toward zero)
 
-    // Test the actual getAbilityFinalMod function with specific values
-    // that would expose Math.round vs pokeRound difference
-    // For Multiscale: mod starts at 4096, then Math.round(4096 * 2048 / 4096) = Math.round(2048) = 2048
-    // This specific case has no .5 so both give same result
-    // Need to find a case where the rounding matters...
-    // When chaining: e.g. Fluffy + Fire contact
-    // mod = Math.round(4096 * 2048 / 4096) = 2048
-    // mod = Math.round(2048 * 8192 / 4096) = Math.round(4096) = 4096
-    // Also no .5 here
-
     // The real concern is: does the ability final mod function use consistent
     // rounding with the rest of the system?
     // Let's verify applyMod uses pokeRound
@@ -91,7 +81,6 @@ describe('Audit L: Known bugs and edge cases', () => {
   });
 
   // L3: Parental Bond (Mega Kangaskhan)
-  // Note: This tests whether Parental Bond is implemented
   it('L3: Parental Bond awareness check', () => {
     // Mega Kangaskhan should have Parental Bond
     const megaKanga = new Pokemon({
@@ -99,12 +88,9 @@ describe('Audit L: Known bugs and edge cases', () => {
       item: 'Kangaskhanite', isMega: true,
     });
     expect(megaKanga.effectiveAbility()).toBe('Parental Bond');
-    // Note: The actual 2-hit calculation with 0.25x second hit may not be implemented
-    // This is documented as a known limitation
   });
 
   // L4+L5+L6: Battery, Power Spot, Flower Gift, Steely Spirit
-  // These are defined as Side conditions but not used in damage calc
   it('L4: Battery/Power Spot are defined but may not affect damage', () => {
     // Just verify these Side options exist in the type system
     const field = new Field({
@@ -113,15 +99,13 @@ describe('Audit L: Known bugs and edge cases', () => {
     });
     expect(field.attackerSide.isBattery).toBe(true);
     expect(field.attackerSide.isPowerSpot).toBe(true);
-    // Note: These should boost SpA by 1.3x (Battery) or all damage by 1.3x (Power Spot)
-    // Currently NOT implemented in damage.ts - documented limitation
   });
 
-  // Edge case: Very high multiplier stacking
+  // Edge case: Very high multiplier stacking (no Life Orb since it's removed)
   it('Edge: Stacking many multipliers doesn\'t overflow', () => {
-    // Helping Hand + STAB + SE + Life Orb + Crit
+    // Helping Hand + STAB + SE + Crit
     const attacker = new Pokemon({
-      name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant', item: 'Life Orb',
+      name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant',
     });
     const defender = new Pokemon({ name: 'Tyranitar', sp: { hp: 32 } });
     const move = new Move('Earthquake', { isCrit: true }); // Ground vs Rock/Dark = 2x SE, Ground STAB
@@ -151,7 +135,7 @@ describe('Audit L: Known bugs and edge cases', () => {
   // Edge case: Status move always produces 0 damage
   it('Edge: Status move produces 0 damage regardless of stats', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Blissey' });
+    const defender = new Pokemon({ name: 'Snorlax' });
     const move = new Move('Swords Dance');
 
     const result = calculate(attacker, defender, move);
@@ -255,7 +239,7 @@ describe('Audit L: MOD constant verification', () => {
     expect(applyMod(100, MOD.x0_667)).toBe(67);
   });
 
-  it('Life Orb MOD = 5324 (5324/4096 ≈ 1.2998)', () => {
+  it('Life Orb MOD = 5324 (5324/4096 ~ 1.2998)', () => {
     expect(MOD.x1_3_life_orb).toBe(5324);
     // 100 * 5324 / 4096 = 129.980... -> fractional 0.980 > 0.5 -> ceil -> 130
     expect(applyMod(100, MOD.x1_3_life_orb)).toBe(130);

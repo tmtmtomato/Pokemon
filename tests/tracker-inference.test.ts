@@ -113,18 +113,18 @@ function makeTurn(config: {
 }
 
 describe('Inference Engine - Mode A (opponent attacks me)', () => {
-  it('should find Adamant Choice Band Garchomp among candidates', () => {
-    // Known opponent: Adamant Garchomp, 32 Atk SP, Choice Band, Rough Skin
-    // Attacking my: Hardy Cresselia, 32 HP / 32 Def SP
+  it('should find Adamant Soft Sand Garchomp among candidates', () => {
+    // Known opponent: Adamant Garchomp, 32 Atk SP, Soft Sand, Rough Skin
+    // Attacking my: Hardy Reuniclus, 32 HP / 32 Def SP
     const actualDmg = getDamagePercent(
-      { name: 'Garchomp', nature: 'Adamant', sp: { atk: 32 }, ability: 'Rough Skin', item: 'Choice Band' },
-      { name: 'Cresselia', nature: 'Hardy', sp: { hp: 32, def: 32 }, ability: 'Levitate' },
+      { name: 'Garchomp', nature: 'Adamant', sp: { atk: 32 }, ability: 'Rough Skin', item: 'Soft Sand' },
+      { name: 'Reuniclus', nature: 'Hardy', sp: { hp: 32, def: 32 }, ability: 'Magic Guard' },
       'Earthquake',
     );
 
     const myTeam = [makeMySlot({
-      species: 'Cresselia', nature: 'Hardy', sp: { hp: 32, def: 32 },
-      ability: 'Levitate',
+      species: 'Reuniclus', nature: 'Hardy', sp: { hp: 32, def: 32 },
+      ability: 'Magic Guard',
     })];
     const oppTeam = [makeOppSlot({ species: 'Garchomp' })];
 
@@ -145,14 +145,14 @@ describe('Inference Engine - Mode A (opponent attacks me)', () => {
     const match = result.candidates.find(c =>
       c.nature === 'Adamant' &&
       c.sp.atk === 32 &&
-      c.item === 'Choice Band'
+      c.item === 'Soft Sand'
     );
     expect(match).toBeDefined();
   });
 
-  it('should find Modest Choice Specs Flutter Mane with special attack', () => {
+  it('should find Modest Fairy Feather Gardevoir with special attack', () => {
     const actualDmg = getDamagePercent(
-      { name: 'Flutter Mane', nature: 'Modest', sp: { spa: 32 }, ability: 'Protosynthesis', item: 'Choice Specs' },
+      { name: 'Gardevoir', nature: 'Modest', sp: { spa: 32 }, ability: 'Trace', item: 'Fairy Feather' },
       { name: 'Incineroar', nature: 'Careful', sp: { hp: 32, spd: 20 }, ability: 'Intimidate' },
       'Moonblast',
     );
@@ -161,7 +161,7 @@ describe('Inference Engine - Mode A (opponent attacks me)', () => {
       species: 'Incineroar', nature: 'Careful', sp: { hp: 32, spd: 20 },
       ability: 'Intimidate',
     })];
-    const oppTeam = [makeOppSlot({ species: 'Flutter Mane' })];
+    const oppTeam = [makeOppSlot({ species: 'Gardevoir' })];
 
     const turn = makeTurn({
       attackerSide: 'opponent',
@@ -177,21 +177,21 @@ describe('Inference Engine - Mode A (opponent attacks me)', () => {
     const match = result.candidates.find(c =>
       c.nature === 'Modest' &&
       c.sp.spa === 32 &&
-      c.item === 'Choice Specs'
+      c.item === 'Fairy Feather'
     );
     expect(match).toBeDefined();
   });
 
   it('should narrow candidates when opponent ability is known', () => {
     const actualDmg = getDamagePercent(
-      { name: 'Garchomp', nature: 'Jolly', sp: { atk: 24 }, ability: 'Rough Skin', item: 'Life Orb' },
-      { name: 'Metagross', nature: 'Adamant', sp: { hp: 20, def: 12 }, ability: 'Clear Body' },
+      { name: 'Garchomp', nature: 'Jolly', sp: { atk: 24 }, ability: 'Rough Skin', item: 'Soft Sand' },
+      { name: 'Tyranitar', nature: 'Adamant', sp: { hp: 20, def: 12 }, ability: 'Sand Stream' },
       'Earthquake',
     );
 
     const myTeam = [makeMySlot({
-      species: 'Metagross', nature: 'Adamant', sp: { hp: 20, def: 12 },
-      ability: 'Clear Body',
+      species: 'Tyranitar', nature: 'Adamant', sp: { hp: 20, def: 12 },
+      ability: 'Sand Stream',
     })];
     // With known ability, should have fewer candidates
     const oppTeamKnown = [makeOppSlot({ species: 'Garchomp', knownAbility: 'Rough Skin' })];
@@ -215,18 +215,18 @@ describe('Inference Engine - Mode A (opponent attacks me)', () => {
 
 describe('Inference Engine - Mode B (I attack opponent)', () => {
   it('should find opponent defensive build among candidates', () => {
-    // I attack with known Garchomp → opponent's Cresselia
+    // I attack with known Garchomp → opponent's Reuniclus
     const actualDmg = getDamagePercent(
-      { name: 'Garchomp', nature: 'Adamant', sp: { atk: 32 }, ability: 'Rough Skin', item: 'Choice Band' },
-      { name: 'Cresselia', nature: 'Bold', sp: { hp: 32, def: 32 }, ability: 'Levitate' },
+      { name: 'Garchomp', nature: 'Adamant', sp: { atk: 32 }, ability: 'Rough Skin', item: 'Black Glasses' },
+      { name: 'Reuniclus', nature: 'Bold', sp: { hp: 32, def: 32 }, ability: 'Magic Guard' },
       'Crunch',
     );
 
     const myTeam = [makeMySlot({
       species: 'Garchomp', nature: 'Adamant', sp: { atk: 32 },
-      ability: 'Rough Skin', item: 'Choice Band',
+      ability: 'Rough Skin', item: 'Black Glasses',
     })];
-    const oppTeam = [makeOppSlot({ species: 'Cresselia' })];
+    const oppTeam = [makeOppSlot({ species: 'Reuniclus' })];
 
     const turn = makeTurn({
       attackerSide: 'mine',
@@ -253,22 +253,23 @@ describe('Inference Engine - Mode B (I attack opponent)', () => {
 
 describe('Cross-turn aggregation', () => {
   it('should narrow candidates across 2 turns', () => {
-    // Turn 1: Opponent Garchomp uses Earthquake on my Cresselia
+    // Turn 1: Opponent Garchomp uses Earthquake on my Reuniclus
+    // Using Leftovers (no damage effect) so the '' item candidate matches both turns
     const dmg1 = getDamagePercent(
-      { name: 'Garchomp', nature: 'Adamant', sp: { atk: 32 }, ability: 'Rough Skin', item: 'Choice Band' },
-      { name: 'Cresselia', nature: 'Hardy', sp: { hp: 32, def: 32 }, ability: 'Levitate' },
+      { name: 'Garchomp', nature: 'Adamant', sp: { atk: 32 }, ability: 'Rough Skin', item: 'Leftovers' },
+      { name: 'Reuniclus', nature: 'Hardy', sp: { hp: 32, def: 32 }, ability: 'Magic Guard' },
       'Earthquake',
     );
 
     // Turn 2: Same Garchomp uses Dragon Claw on my Incineroar
     const dmg2 = getDamagePercent(
-      { name: 'Garchomp', nature: 'Adamant', sp: { atk: 32 }, ability: 'Rough Skin', item: 'Choice Band' },
+      { name: 'Garchomp', nature: 'Adamant', sp: { atk: 32 }, ability: 'Rough Skin', item: 'Leftovers' },
       { name: 'Incineroar', nature: 'Careful', sp: { hp: 32, spd: 20 }, ability: 'Intimidate' },
       'Dragon Claw',
     );
 
     const myTeam = [
-      makeMySlot({ species: 'Cresselia', nature: 'Hardy', sp: { hp: 32, def: 32 }, ability: 'Levitate' }),
+      makeMySlot({ species: 'Reuniclus', nature: 'Hardy', sp: { hp: 32, def: 32 }, ability: 'Magic Guard' }),
       makeMySlot({ species: 'Incineroar', nature: 'Careful', sp: { hp: 32, spd: 20 }, ability: 'Intimidate' }),
     ];
     const oppTeam = [makeOppSlot({ species: 'Garchomp' })];
@@ -293,8 +294,7 @@ describe('Cross-turn aggregation', () => {
       Math.min(new Set(inf1.candidates.map(c => c.nature)).size, new Set(inf2.candidates.map(c => c.nature)).size)
     );
 
-    // Adamant + Choice Band should still be among possibilities
+    // Adamant should still be among possibilities
     expect(aggregated.natures.has('Adamant')).toBe(true);
-    expect(aggregated.items.has('Choice Band')).toBe(true);
   });
 });

@@ -102,7 +102,7 @@ describe('Audit G: Weather modifiers', () => {
   // G6b: Snow doesn't boost non-Ice Def
   it('G6b: Snow does NOT boost non-Ice Def', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const nonIce = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const nonIce = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
 
     const noSnow = calculate(attacker, nonIce, move, new Field({ gameType: 'Singles' }));
@@ -180,7 +180,7 @@ describe('Audit G: Screens', () => {
   // G11: Reflect (physical) - Singles 0.5x, Doubles ~0.667x
   it('G11a: Reflect halves physical damage in Singles', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
 
     const noScreen = calculate(attacker, defender, move, new Field({ gameType: 'Singles' }));
@@ -193,7 +193,7 @@ describe('Audit G: Screens', () => {
 
   it('G11b: Reflect reduces physical damage to ~0.667x in Doubles', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     // Use a non-spread move to isolate screen effect
     const move = new Move('Dragon Claw');
 
@@ -208,7 +208,7 @@ describe('Audit G: Screens', () => {
   // G12: Light Screen (special)
   it('G12: Light Screen halves special damage in Singles', () => {
     const attacker = new Pokemon({ name: 'Charizard', sp: { spa: 32 }, nature: 'Modest' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, spd: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, spd: 32 } });
     const move = new Move('Flamethrower');
 
     const noScreen = calculate(attacker, defender, move, new Field({ gameType: 'Singles' }));
@@ -222,7 +222,7 @@ describe('Audit G: Screens', () => {
   // G13: Aurora Veil (both physical and special)
   it('G13a: Aurora Veil halves physical damage in Singles', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const move = new Move('Earthquake');
 
     const noScreen = calculate(attacker, defender, move, new Field({ gameType: 'Singles' }));
@@ -235,7 +235,7 @@ describe('Audit G: Screens', () => {
 
   it('G13b: Aurora Veil halves special damage in Singles', () => {
     const attacker = new Pokemon({ name: 'Charizard', sp: { spa: 32 }, nature: 'Modest' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, spd: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, spd: 32 } });
     const move = new Move('Flamethrower');
 
     const noScreen = calculate(attacker, defender, move, new Field({ gameType: 'Singles' }));
@@ -249,7 +249,7 @@ describe('Audit G: Screens', () => {
   // G11c: Reflect doesn't affect special moves
   it('G11c: Reflect does NOT affect special moves', () => {
     const attacker = new Pokemon({ name: 'Charizard', sp: { spa: 32 }, nature: 'Modest' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, spd: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, spd: 32 } });
     const move = new Move('Flamethrower');
 
     const noScreen = calculate(attacker, defender, move, new Field({ gameType: 'Singles' }));
@@ -321,7 +321,7 @@ describe('Audit H: Critical hits', () => {
   // H1: Crit 1.5x
   it('H1: Critical hit does ~1.5x damage', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const normal = new Move('Earthquake');
     const crit = new Move('Earthquake', { isCrit: true });
     const field = new Field({ gameType: 'Singles' });
@@ -336,7 +336,7 @@ describe('Audit H: Critical hits', () => {
   // H2: Crit ignores Reflect
   it('H2: Critical hit ignores Reflect', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const crit = new Move('Earthquake', { isCrit: true });
 
     const noScreen = calculate(attacker, defender, crit, new Field({ gameType: 'Singles' }));
@@ -350,10 +350,10 @@ describe('Audit H: Critical hits', () => {
   it('H3: Critical hit ignores defender positive Def boost', () => {
     const attacker = new Pokemon({ name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant' });
     const boosted = new Pokemon({
-      name: 'Metagross', sp: { hp: 32, def: 32 }, boosts: { def: 2 },
+      name: 'Excadrill', sp: { hp: 32, def: 32 }, boosts: { def: 2 },
     });
     const unboosted = new Pokemon({
-      name: 'Metagross', sp: { hp: 32, def: 32 },
+      name: 'Excadrill', sp: { hp: 32, def: 32 },
     });
     const crit = new Move('Earthquake', { isCrit: true });
     const field = new Field({ gameType: 'Singles' });
@@ -373,7 +373,7 @@ describe('Audit H: Critical hits', () => {
     const normal = new Pokemon({
       name: 'Garchomp', sp: { atk: 32 }, nature: 'Adamant',
     });
-    const defender = new Pokemon({ name: 'Metagross', sp: { hp: 32, def: 32 } });
+    const defender = new Pokemon({ name: 'Excadrill', sp: { hp: 32, def: 32 } });
     const crit = new Move('Earthquake', { isCrit: true });
     const field = new Field({ gameType: 'Singles' });
 
