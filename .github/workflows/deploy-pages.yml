@@ -3,7 +3,9 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [master]
-    paths: [build/firepower.html]
+    paths:
+      - build/firepower.html
+      - build/sprites/pokemon/menu/**
   workflow_dispatch:
 
 permissions:
@@ -26,9 +28,10 @@ jobs:
 
       - name: Prepare pages
         run: |
-          mkdir -p _site
+          mkdir -p _site/sprites/pokemon/menu
           cp build/firepower.html _site/index.html
           cp build/firepower.html _site/firepower.html
+          cp -r build/sprites/pokemon/menu/* _site/sprites/pokemon/menu/
 
       - uses: actions/upload-pages-artifact@v3
         with:

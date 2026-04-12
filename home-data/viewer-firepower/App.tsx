@@ -17,7 +17,28 @@ import {
   localizedSearchKey,
   type Lang,
 } from "../viewer/i18n";
+import { MENU_SPRITE_MAP } from "../../app/lib/menu-sprite-map";
 import rankingJson from "../storage/analysis/firepower-ranking.json";
+
+// ===== Sprite helper =====
+function spritePath(name: string, isMega: boolean): string {
+  const key = isMega ? `${name}-Mega` : name;
+  const file = MENU_SPRITE_MAP[key];
+  return file ? `./sprites/pokemon/menu/${file}` : "";
+}
+
+function PokemonIcon({ name, isMega }: { name: string; isMega: boolean }) {
+  const src = spritePath(name, isMega);
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      className="inline-block w-7 h-7 object-contain align-middle mr-1"
+      loading="lazy"
+    />
+  );
+}
 
 // ===== Types =====
 interface MoveEntry {
@@ -462,6 +483,7 @@ function PokemonRow({
       <tr className="border-b border-gray-800 hover:bg-gray-900/50 cursor-pointer" onClick={onToggle}>
         <td className="py-1 px-2 text-gray-500">{r.rank}</td>
         <td className="py-1 px-2 font-medium whitespace-nowrap">
+          <PokemonIcon name={r.pokemon} isMega={r.isMega} />
           {localizePokemon(r.pokemon, lang)}
           {r.isMega && <span className="ml-1 text-xs text-purple-400 font-normal">MEGA</span>}
         </td>
@@ -614,6 +636,7 @@ function MoveTable({
               className="border-b border-gray-800 hover:bg-gray-900/50">
               <td className="py-1 px-2 text-gray-500 tabular-nums">{i + 1}</td>
               <td className="py-1 px-2 font-medium whitespace-nowrap">
+                <PokemonIcon name={r.pokemon} isMega={r.isMega} />
                 {localizePokemon(r.pokemon, lang)}
                 {r.isMega && <span className="ml-1 text-xs text-purple-400 font-normal">M</span>}
               </td>
