@@ -47,12 +47,11 @@ export function getAbilityBasePowerMod(
           (move.type === 'Rock' || move.type === 'Ground' || move.type === 'Steel'))
         return MOD.x1_3;
       break;
-    // Dragonize: Normal -> Dragon type change + 1.2x power (like Aerilate etc.)
+    // -ate abilities: Normal -> [type] + 1.2x power
     case 'Dragonize':
-      if (move.type === 'Normal' && move.category !== 'Status') return MOD.x1_2;
-      break;
-    // -ate abilities
     case 'Pixilate':
+    case 'Aerilate':
+    case 'Refrigerate':
       if (move.type === 'Normal' && move.category !== 'Status') return MOD.x1_2;
       break;
     // パンクロック（攻撃側）: 音技のダメージ1.3倍
@@ -240,7 +239,8 @@ export function getEffectiveMoveType(attacker: Pokemon, move: Move): TypeName {
     switch (ability) {
       case 'Dragonize': return 'Dragon';
       case 'Pixilate': return 'Fairy';
-      // Add more -ate abilities as needed
+      case 'Aerilate': return 'Flying';
+      case 'Refrigerate': return 'Ice';
     }
   }
   return move.type;

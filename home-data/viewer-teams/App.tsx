@@ -22,6 +22,8 @@ export default function App() {
   const [dark, setDark] = useState(true);
 
   // Team tab state
+  type TeamSort = "count" | "winRate";
+  const [teamSort, setTeamSort] = useState<TeamSort>("count");
   const [selectedTeamKey, setSelectedTeamKey] = useState<string | undefined>(
     () => DATA.teams[0]?.key,
   );
@@ -44,6 +46,13 @@ export default function App() {
       document.body.classList.add("bg-gray-100", "text-gray-900");
     }
   }, [dark]);
+
+  const sortedTeams = useMemo(() => {
+    if (teamSort === "winRate") {
+      return [...DATA.teams].sort((a, b) => b.winRate - a.winRate || b.count - a.count);
+    }
+    return DATA.teams; // already sorted by count
+  }, [teamSort]);
 
   const selectedTeam = useMemo(
     () => DATA.teams.find((t) => t.key === selectedTeamKey),
@@ -72,9 +81,11 @@ export default function App() {
                 {DATA.teams.length} teams · {DATA.totalReplays} replays
               </div>
               <TeamList
-                teams={DATA.teams}
+                teams={sortedTeams}
                 selected={selectedTeamKey}
                 onSelect={setSelectedTeamKey}
+                sort={teamSort}
+                onSortChange={setTeamSort}
               />
             </aside>
             <main className="viewer-scroll flex-1 overflow-y-auto bg-gray-950">

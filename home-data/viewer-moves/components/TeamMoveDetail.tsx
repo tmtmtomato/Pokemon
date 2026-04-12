@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import type { PoolMember, RankedTeam } from "../../types/team-matchup";
-import { localizePokemon, type Lang } from "../../viewer/i18n";
+import { localizePokemon, localizeItem, natureDisplay, type Lang } from "../../viewer/i18n";
 import MoveMatrix from "./MoveMatrix";
 import OpponentSelector from "./OpponentSelector";
 import { computeTeamCoverage } from "../moveCalc";
@@ -111,7 +111,16 @@ export default function TeamMoveDetail({ team, pool, topTeams, lang }: Props) {
               )}
               <div className="flex-1" />
               <span className="text-[10px] text-gray-500">
-                {member.nature} / {member.item}
+                {natureDisplay(member.nature, lang)} / {localizeItem(member.item, lang)}
+                {" "}
+                <span className="tabular-nums">
+                  {(["hp","atk","def","spa","spd","spe"] as const).map((k, i) => {
+                    const v = member.sp[k];
+                    if (v === 0) return null;
+                    const l = ["H","A","B","C","D","S"][i];
+                    return <span key={k} className={`mr-0.5 ${v >= 32 ? "text-emerald-400 font-bold" : "text-gray-400"}`}>{l}{v}</span>;
+                  })}
+                </span>
               </span>
             </button>
 

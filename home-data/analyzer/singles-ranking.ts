@@ -180,6 +180,15 @@ const NATURE_BOOST: Record<string, string | undefined> = {
   Careful: "spd",
 };
 
+// Nature → penalized stat (used for speed nature SP classification)
+const NATURE_PENALTY: Record<string, string | undefined> = {
+  Lonely: "def", Brave: "spe", Adamant: "spa", Naughty: "spd",
+  Bold: "atk", Relaxed: "spe", Impish: "spa", Lax: "spd",
+  Timid: "atk", Hasty: "def", Jolly: "spa", Naive: "spd",
+  Modest: "atk", Mild: "def", Quiet: "spe", Rash: "spd",
+  Calm: "atk", Gentle: "def", Sassy: "spe", Careful: "spa",
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function loadJson<T = any>(path: string): T {
@@ -189,8 +198,8 @@ function loadJson<T = any>(path: string): T {
 function classifySPPattern(nature: string, baseAtk: number, baseSpa: number): SPPattern {
   const boost = NATURE_BOOST[nature];
   if (!boost) {
-    // Neutral nature: classify by Pokemon's orientation
-    return baseAtk >= baseSpa ? "physicalAT" : "specialAT";
+    // Neutral nature: strict > comparison (equal → specialAT)
+    return baseAtk > baseSpa ? "physicalAT" : "specialAT";
   }
   switch (boost) {
     case "atk":
@@ -201,8 +210,14 @@ function classifySPPattern(nature: string, baseAtk: number, baseSpa: number): SP
       return "hbWall";
     case "spd":
       return "hdWall";
-    case "spe":
-      return baseAtk >= baseSpa ? "physicalAT" : "specialAT";
+    case "spe": {
+      // Speed nature: use penalty stat to determine orientation
+      const penalty = NATURE_PENALTY[nature];
+      if (penalty === "atk") return "specialAT";  // Timid: -Atk → special
+      if (penalty === "spa") return "physicalAT";  // Jolly: -SpA → physical
+      // Hasty (-Def) / Naive (-SpD): no attack penalty → use base stats
+      return baseAtk > baseSpa ? "physicalAT" : "specialAT";
+    }
     default:
       return "physicalAT";
   }
@@ -219,24 +234,14 @@ function forceAddSpeedNature(
   baseSpa: number,
 ): { nature: string; pct: number }[] {
   const result = [...natures];
-  const hasPhysicalAT = natures.some((n) => {
-    const b = NATURE_BOOST[n.nature];
-    return b === "atk" || (!b && baseAtk >= baseSpa) || b === "spe";
-  });
-  const hasSpecialAT = natures.some((n) => {
-    const b = NATURE_BOOST[n.nature];
-    return b === "spa" || (!b && baseSpa > baseAtk) || b === "spe";
-  });
 
-  if (hasPhysicalAT || baseAtk >= baseSpa) {
-    if (!result.some((n) => n.nature === "Jolly")) {
-      result.push({ nature: "Jolly", pct: FORCED_SPEED_NATURE_PCT });
-    }
+  // Add Jolly (physical speed nature) if ATK >= SPA
+  if (baseAtk >= baseSpa && !result.some((n) => n.nature === "Jolly")) {
+    result.push({ nature: "Jolly", pct: FORCED_SPEED_NATURE_PCT });
   }
-  if (hasSpecialAT || baseSpa > baseAtk) {
-    if (!result.some((n) => n.nature === "Timid")) {
-      result.push({ nature: "Timid", pct: FORCED_SPEED_NATURE_PCT });
-    }
+  // Add Timid (special speed nature) if SPA >= ATK (equal → add both)
+  if (baseSpa >= baseAtk && !result.some((n) => n.nature === "Timid")) {
+    result.push({ nature: "Timid", pct: FORCED_SPEED_NATURE_PCT });
   }
   return result;
 }
@@ -406,8 +411,8 @@ function generateBuilds(
   // Use raw-recon natures, or infer from species stats
   let resolvedNatures = [...natures];
   if (resolvedNatures.length === 0) {
-    // Fallback: pick a nature based on the Pokemon's stats
-    if (species.baseStats.atk >= species.baseStats.spa) {
+    // Fallback: pick a nature based on the Pokemon's stats (strict >; equal → special)
+    if (species.baseStats.atk > species.baseStats.spa) {
       resolvedNatures = [{ nature: "Adamant", pct: 50 }, { nature: "Jolly", pct: 50 }];
     } else {
       resolvedNatures = [{ nature: "Modest", pct: 50 }, { nature: "Timid", pct: 50 }];
@@ -439,14 +444,13 @@ function generateBuilds(
   for (const nat of resolvedNatures) {
     for (const item of items) {
       for (const ability of abilities) {
-        const spPattern = classifySPPattern(
-          nat.nature,
-          species.baseStats.atk,
-          species.baseStats.spa,
-        );
-
         // Check if this item is a mega stone for this Pokemon
         const isMega = !!(species.mega && species.mega.stone === item.name);
+
+        // Use mega base stats for SP classification when applicable
+        const atkBase = isMega && species.mega ? species.mega.baseStats.atk : species.baseStats.atk;
+        const spaBase = isMega && species.mega ? species.mega.baseStats.spa : species.baseStats.spa;
+        const spPattern = classifySPPattern(nat.nature, atkBase, spaBase);
 
         builds.push({
           nature: nat.nature,
@@ -516,7 +520,8 @@ function generateDefaultBuild(
   // Determine nature based on stats
   let resolvedNatures = [...natures];
   if (resolvedNatures.length === 0) {
-    if (species.baseStats.atk >= species.baseStats.spa) {
+    // Strict > comparison (equal → special)
+    if (species.baseStats.atk > species.baseStats.spa) {
       resolvedNatures = [{ nature: "Adamant", pct: 50 }, { nature: "Jolly", pct: 50 }];
     } else {
       resolvedNatures = [{ nature: "Modest", pct: 50 }, { nature: "Timid", pct: 50 }];
@@ -555,8 +560,8 @@ function generateDefaultBuild(
   // Sort by power descending
   candidates.sort((a, b) => b.power - a.power);
 
-  // Preferred category
-  const preferred = species.baseStats.atk >= species.baseStats.spa ? "Physical" : "Special";
+  // Preferred category (strict >; equal → Special)
+  const preferred = species.baseStats.atk > species.baseStats.spa ? "Physical" : "Special";
 
   // Pick best STAB moves (up to 2, one per type)
   for (const type of species.types) {
@@ -602,8 +607,10 @@ function generateDefaultBuild(
   for (const nat of resolvedNatures) {
     for (const item of items) {
       for (const ability of abilities) {
-        const spPattern = classifySPPattern(nat.nature, species.baseStats.atk, species.baseStats.spa);
         const isMega = !!(species.mega && species.mega.stone === item.name);
+        const atkBase = isMega && species.mega ? species.mega.baseStats.atk : species.baseStats.atk;
+        const spaBase = isMega && species.mega ? species.mega.baseStats.spa : species.baseStats.spa;
+        const spPattern = classifySPPattern(nat.nature, atkBase, spaBase);
         builds.push({
           nature: nat.nature,
           item: item.name,

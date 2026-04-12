@@ -14,26 +14,46 @@ const TYPE_COLORS: Record<string, string> = {
 
 function koLabel(koN: number, koChance: number): string {
   if (koN === 0) return "-";
-  const prefix = koN === 1 ? "確1" : koN === 2 ? "確2" : koN === 3 ? "確3" : "確4";
-  if (koChance >= 1.0) return prefix;
-  return `${prefix} ${Math.round(koChance * 100)}%`;
+  const guaranteed = koChance >= 1;
+  const prefix = guaranteed ? "確" : "乱";
+  if (guaranteed) return `${prefix}${koN}`;
+  return `${prefix}${koN} ${Math.round(koChance * 100)}%`;
 }
 
 function koLabelEn(koN: number, koChance: number): string {
   if (koN === 0) return "-";
-  const prefix = koN === 1 ? "OHKO" : koN === 2 ? "2HKO" : koN === 3 ? "3HKO" : "4HKO";
-  if (koChance >= 1.0) return prefix;
-  return `${prefix} ${Math.round(koChance * 100)}%`;
+  const label = koN === 1 ? "OHKO" : `${koN}HKO`;
+  if (koChance >= 1) return label;
+  return `${Math.round(koChance * 100)}% ${label}`;
 }
 
 function cellColor(effectiveness: number, maxPct: number): string {
-  if (effectiveness === 0) return "bg-gray-900/50 text-gray-600";
-  if (effectiveness < 1) return "bg-red-900/30 text-red-400/80";
-  if (effectiveness > 1 && maxPct >= 100) return "bg-emerald-900/60 text-emerald-300";
-  if (effectiveness > 1) return "bg-emerald-900/30 text-emerald-400/80";
-  if (maxPct >= 100) return "bg-lime-900/40 text-lime-300";
-  if (maxPct >= 50) return "bg-gray-800/50 text-gray-200";
-  return "bg-gray-800/30 text-gray-400";
+  if (effectiveness === 0) return "bg-gray-900/50 text-gray-600";       // immune
+  if (effectiveness < 1) {
+    // NVE: red tones, brighter for higher damage
+    if (maxPct >= 50) return "bg-red-900/50 text-red-300";
+    return "bg-red-900/30 text-red-400/80";
+  }
+  // SE or neutral: color by damage amount
+  if (maxPct >= 100) {
+    return effectiveness > 1
+      ? "bg-emerald-800/70 text-emerald-200 font-semibold"              // SE OHKO
+      : "bg-emerald-900/50 text-emerald-300";                           // neutral OHKO
+  }
+  if (maxPct >= 60) {
+    return effectiveness > 1
+      ? "bg-teal-900/50 text-teal-300"                                  // SE 2HKO range
+      : "bg-teal-900/40 text-teal-400";                                 // neutral 2HKO range
+  }
+  if (maxPct >= 35) {
+    return effectiveness > 1
+      ? "bg-sky-900/40 text-sky-300"                                    // SE 3HKO range
+      : "bg-gray-800/50 text-gray-200";                                 // neutral 3HKO range
+  }
+  // Low damage (<35%)
+  return effectiveness > 1
+    ? "bg-emerald-900/20 text-emerald-500/70"                           // SE but low
+    : "bg-gray-800/30 text-gray-400";                                   // neutral low
 }
 
 interface Props {

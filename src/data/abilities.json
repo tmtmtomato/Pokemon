@@ -84,6 +84,12 @@
   "Vessel of Ruin": { "name": "Vessel of Ruin", "effect": "vessel_of_ruin" },
   "White Smoke": { "name": "White Smoke", "effect": "prevent_stat_drop" },
 
+  "Aerilate": { "name": "Aerilate", "effect": "aerilate" },
+  "Bulletproof": { "name": "Bulletproof", "effect": "bulletproof" },
+  "Refrigerate": { "name": "Refrigerate", "effect": "refrigerate" },
+  "Skill Link": { "name": "Skill Link", "effect": "skill_link" },
+  "Unseen Fist": { "name": "Unseen Fist", "effect": "unseen_fist" },
+
   "Bad Dreams": { "name": "Bad Dreams", "effect": "bad_dreams" },
   "Contrary": { "name": "Contrary", "effect": "contrary" },
   "Dauntless Shield": { "name": "Dauntless Shield", "effect": "dauntless_shield" },

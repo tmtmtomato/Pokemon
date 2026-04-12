@@ -9,6 +9,7 @@ import TeamMoveDetail from "./components/TeamMoveDetail";
 import ThreatAnalysis from "./components/ThreatAnalysis";
 
 import rawData from "../storage/analysis/2026-04-10-team-matchup.json";
+import metaRankingData from "../storage/analysis/meta-ranking.json";
 const data = rawData as unknown as TeamMatchupResult;
 
 type Mode = "individual" | "team" | "threat";
@@ -115,6 +116,8 @@ export default function App() {
             <ThreatAnalysis
               pool={pool}
               topTeams={data.topTeams}
+              pokemonStats={data.pokemonStats}
+              metaRanking={metaRankingData as { name: string; isMega: boolean; weightedWinRate: number }[]}
               lang={lang}
             />
           )}

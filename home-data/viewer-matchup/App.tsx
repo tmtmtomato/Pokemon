@@ -9,13 +9,13 @@ import { TeamDetail } from "./components/TeamDetail";
 
 const data = matchupJson as unknown as TeamMatchupResult;
 
-export type SortKey = "winRate" | "avgScore";
+export type SortKey = "combined" | "winRate" | "avgScore" | "dominance";
 
 export default function App() {
   const { lang, toggleLang } = useLang();
   const [dark, setDark] = useState(true);
   const [selectedId, setSelectedId] = useState<string>(data.topTeams[0]?.teamId ?? "");
-  const [sortKey, setSortKey] = useState<SortKey>("winRate");
+  const [sortKey, setSortKey] = useState<SortKey>("combined");
   const [query, setQuery] = useState("");
 
   const toggleDark = () => {
@@ -42,6 +42,17 @@ export default function App() {
 
     list.sort((a, b) => {
       if (sortKey === "avgScore") return b.avgScore - a.avgScore;
+      if (sortKey === "dominance") {
+        const da = a.threatProfile?.dominanceScore ?? 0;
+        const db = b.threatProfile?.dominanceScore ?? 0;
+        return db - da || b.winRate - a.winRate;
+      }
+      if (sortKey === "combined") {
+        // Same formula as pipeline ranking: 0.6*WR + 0.4*dominance
+        const sa = 0.6 * (a.winRate * 100) + 0.4 * (a.threatProfile?.dominanceScore ?? 0);
+        const sb = 0.6 * (b.winRate * 100) + 0.4 * (b.threatProfile?.dominanceScore ?? 0);
+        return sb - sa || b.winRate - a.winRate;
+      }
       return b.winRate - a.winRate;
     });
 

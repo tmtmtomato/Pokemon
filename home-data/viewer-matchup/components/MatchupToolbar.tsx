@@ -20,8 +20,10 @@ interface MatchupToolbarProps {
 }
 
 const SORT_OPTIONS: { key: SortKey; labelJa: string; labelEn: string }[] = [
+  { key: "combined", labelJa: "総合", labelEn: "Combined" },
   { key: "winRate", labelJa: "勝率", labelEn: "Win Rate" },
   { key: "avgScore", labelJa: "スコア", labelEn: "Score" },
+  { key: "dominance", labelJa: "支配力", labelEn: "Dominance" },
 ];
 
 export function MatchupToolbar({

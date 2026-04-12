@@ -1,6 +1,6 @@
 import React from "react";
 import type { PoolMember, RankedTeam } from "../../types/team-matchup";
-import { localizePokemon, localizeMove, localizeItem, localizeAbility, type Lang } from "../../viewer/i18n";
+import { localizePokemon, localizeMove, localizeItem, localizeAbility, natureDisplay, type Lang } from "../../viewer/i18n";
 import MoveMatrix from "./MoveMatrix";
 import OpponentSelector from "./OpponentSelector";
 
@@ -61,13 +61,22 @@ export default function MoveConsistencyDetail({
       {/* Build info */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
         <span>
-          {lang === "ja" ? "性格" : "Nature"}: <span className="text-gray-300">{pokemon.nature}</span>
+          {lang === "ja" ? "性格" : "Nature"}: <span className="text-gray-300">{natureDisplay(pokemon.nature, lang)}</span>
         </span>
         <span>
           {lang === "ja" ? "持ち物" : "Item"}: <span className="text-gray-300">{localizeItem(pokemon.item, lang)}</span>
         </span>
         <span>
           {lang === "ja" ? "特性" : "Ability"}: <span className="text-gray-300">{localizeAbility(pokemon.ability, lang)}</span>
+        </span>
+        <span>
+          SP: <span className="text-gray-300 tabular-nums">
+            {(["hp","atk","def","spa","spd","spe"] as const).map((k, i) => {
+              const v = pokemon.sp[k];
+              const l = ["H","A","B","C","D","S"][i];
+              return <span key={k} className={`mr-1 ${v >= 32 ? "text-emerald-400 font-bold" : v > 0 ? "text-gray-300" : "text-gray-600"}`}>{l}{v}</span>;
+            })}
+          </span>
         </span>
         <span>
           {lang === "ja" ? "技" : "Moves"}: <span className="text-gray-300">{pokemon.moves.map((m) => localizeMove(m, lang)).join(", ")}</span>

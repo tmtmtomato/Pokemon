@@ -4,6 +4,7 @@ import type { Move } from '../move.js';
 import type { Field } from '../field.js';
 import { applyMod, MOD } from './util.js';
 import { getEffectiveness } from './type-effectiveness.js';
+import typeChart from '../data/typechart.json' with { type: 'json' };
 import { getEffectiveMoveType, getSTABMod, getAbilityBasePowerMod, getAbilityAttackMod, getAbilityDefenseMod, getAbilityFinalMod, getEffectiveWeatherForAttacker } from './abilities.js';
 import { getItemAttackMod, getItemDefenseMod, getItemFinalMod, getItemDefenderFinalMod } from './items.js';
 import { getEffectiveBasePower, getOffensiveStat, getDefensiveStat } from './moves.js';
@@ -42,18 +43,42 @@ export function calculateDamage(
   // 2. Type effectiveness
   // テラスタル中の防御側はテラタイプで相性判定（ステラテラは元タイプで判定）
   const defenderTypes = defender.effectiveTypes();
-  const typeEff = getEffectiveness(moveType, defenderTypes);
+  let typeEff = getEffectiveness(moveType, defenderTypes);
+
+  // きもったま (Scrappy): ノーマル/かくとう技がゴーストに通る
+  if (typeEff === 0 && attacker.effectiveAbility() === 'Scrappy' &&
+      (moveType === 'Normal' || moveType === 'Fighting')) {
+    // Recalculate ignoring Ghost immunity
+    typeEff = 1;
+    for (const defType of defenderTypes) {
+      if (defType === 'Ghost') continue;
+      const chart = (typeChart as Record<string, Record<string, number>>)[moveType];
+      if (chart && defType in chart) typeEff *= chart[defType];
+    }
+  }
+
   if (typeEff === 0) {
+    return { rolls: new Array(16).fill(0), moveType, typeEffectiveness: 0, isCrit };
+  }
+
+  // ぼうだん (Bulletproof): 弾系技を無効化（かたやぶりで貫通）
+  if (!attacker.hasMoldBreaker() && defender.effectiveAbility() === 'Bulletproof' && move.flags.bullet) {
     return { rolls: new Array(16).fill(0), moveType, typeEffectiveness: 0, isCrit };
   }
 
   // 3. Effective base power
   let basePower = getEffectiveBasePower(move, attacker, defender);
 
-  // Ability-based BP modifier
+  // Ability-based BP modifier (attacker)
   const abilityBpMod = getAbilityBasePowerMod(attacker, move, defender, field);
   if (abilityBpMod !== MOD.x1_0) {
     basePower = applyMod(basePower, abilityBpMod);
+  }
+
+  // あついしぼう (Thick Fat): 炎/氷技のベースパワー0.5倍（かたやぶりで貫通）
+  if (!attacker.hasMoldBreaker() && defender.effectiveAbility() === 'Thick Fat' &&
+      (moveType === 'Fire' || moveType === 'Ice')) {
+    basePower = applyMod(basePower, MOD.x0_5);
   }
 
   // Terrain boost (1.3x for matching type, grounded pokemon)

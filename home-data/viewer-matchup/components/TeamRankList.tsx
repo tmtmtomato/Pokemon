@@ -63,7 +63,17 @@ export function TeamRankList({ teams, selected, onSelect, lang }: TeamRankListPr
                 #{t.rank}
               </span>
               <span className="text-xs text-gray-200 tabular-nums">
-                WR: {wrPct}%
+                WR:{wrPct}%
+                {t.threatProfile && (
+                  <>
+                    <span className="text-amber-400 ml-1">D:{t.threatProfile.dominanceScore}</span>
+                    {t.threatProfile.unansweredCount > 0 && (
+                      <span className={`ml-1 ${t.threatProfile.criticalGaps > 0 ? "text-red-400 font-semibold" : "text-red-400/70"}`}>
+                        !{t.threatProfile.unansweredCount}
+                      </span>
+                    )}
+                  </>
+                )}
               </span>
             </div>
 
@@ -81,9 +91,12 @@ export function TeamRankList({ teams, selected, onSelect, lang }: TeamRankListPr
               ))}
             </div>
 
-            {/* Win rate mini bar */}
-            <div className="mt-1">
+            {/* Win rate + dominance mini bars */}
+            <div className="mt-1 space-y-0.5">
               <MiniBar value={t.winRate * 100} color="bg-emerald-500/70" />
+              {t.threatProfile && (
+                <MiniBar value={t.threatProfile.dominanceScore} color="bg-amber-500/70" />
+              )}
             </div>
           </button>
         );

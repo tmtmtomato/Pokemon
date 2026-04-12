@@ -65,6 +65,34 @@ export interface SelectionPattern {
   winRate: number;
 }
 
+/** Threat level classification for a pool opponent */
+export type ThreatLevel = "low" | "medium" | "high" | "critical";
+
+/** Per-opponent threat assessment */
+export interface ThreatEntry {
+  opponent: string;
+  usagePct: number;        // Opponent's usage rate in the meta
+  threatLevel: ThreatLevel;
+  ourBestKoN: number;      // Best KO count any team member achieves
+  ourBestMember: string;   // Who deals best damage
+  theirBestKoN: number;    // Their best KO count against any team member
+  theirBestTarget: string; // Who they hit hardest
+  hasAnswer: boolean;      // Can we reliably handle this opponent?
+}
+
+/** Aggregate threat profile for a team vs the pool */
+export interface ThreatProfile {
+  killPressure: number;      // 0-100: offensive dominance (殺意)
+  threatResistance: number;  // 0-100: defensive safety (脅威耐性)
+  answerRate: number;        // 0-100: usage-weighted answer rate (使用率加重回答率)
+  dominanceScore: number;    // Combined 0-100 score
+  criticalThreats: number;   // Count of critical-level opponents
+  highThreats: number;       // Count of high-level opponents
+  unansweredCount: number;   // Count of unanswered opponents
+  criticalGaps: number;      // Count of unanswered top-10 usage opponents
+  topThreats: ThreatEntry[]; // Top 5 most dangerous opponents
+}
+
 /** A ranked team in the final output */
 export interface RankedTeam {
   rank: number;
@@ -80,6 +108,7 @@ export interface RankedTeam {
     offensiveTypes: string[];
     defensiveWeaks: string[];
   };
+  threatProfile?: ThreatProfile;
 }
 
 /** Per-Pokemon statistics across all teams */
@@ -103,6 +132,8 @@ export interface TeamMatchupResult {
     totalTeams: number;
     gamesPerTeam: number;
     poolSize: number;
+    poolFiltered?: number;
+    teamsRejected?: number;
   };
   pool: PoolMember[];
   damageMatrix: DamageMatrix;

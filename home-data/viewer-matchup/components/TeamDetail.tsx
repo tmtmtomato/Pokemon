@@ -57,6 +57,21 @@ function TypeBadge({ type, lang }: { type: string; lang: Lang }) {
   );
 }
 
+function ThreatBar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-gray-400 w-16 text-right shrink-0">{label}</span>
+      <div className="flex-1 h-2 rounded-full bg-gray-700 overflow-hidden">
+        <div
+          className={`h-full rounded-full ${color}`}
+          style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+        />
+      </div>
+      <span className="text-[10px] text-gray-300 tabular-nums w-8">{value}</span>
+    </div>
+  );
+}
+
 export function TeamDetail({
   team,
   pool,
@@ -82,6 +97,19 @@ export function TeamDetail({
     defensiveWeaks: lang === "ja" ? "弱点" : "Weaknesses",
     frequency: lang === "ja" ? "出現率" : "Frequency",
     winRateLabel: lang === "ja" ? "勝率" : "Win Rate",
+    threatAnalysis: lang === "ja" ? "脅威分析" : "Threat Analysis",
+    killPressure: lang === "ja" ? "殺意" : "Kill Pressure",
+    threatResistance: lang === "ja" ? "脅威耐性" : "Threat Resistance",
+    answerRate: lang === "ja" ? "回答率" : "Answer Rate",
+    dominance: lang === "ja" ? "支配力" : "Dominance",
+    topThreats: lang === "ja" ? "要注意ポケモン" : "Top Threats",
+    critical: lang === "ja" ? "危険" : "CRIT",
+    high: lang === "ja" ? "高" : "HIGH",
+    answer: lang === "ja" ? "回答" : "Answer",
+    noAnswer: lang === "ja" ? "回答なし" : "No answer",
+    unanswered: lang === "ja" ? "未回答" : "Unanswered",
+    criticalGaps: lang === "ja" ? "致命的ギャップ" : "Critical Gaps",
+    usage: lang === "ja" ? "使用率" : "Usage",
   };
 
   // Look up a pool member by name
@@ -125,8 +153,127 @@ export function TeamDetail({
               {team.avgScore.toFixed(1)}
             </span>
           </span>
+          {team.threatProfile && (
+            <span>
+              {t.dominance}:{" "}
+              <span className="font-semibold text-amber-400">
+                {team.threatProfile.dominanceScore}
+              </span>
+            </span>
+          )}
         </div>
       </div>
+
+      {/* ── Section 1.5: Threat Analysis ── */}
+      {team.threatProfile && (
+        <div>
+          <h3 className="text-xs font-semibold text-gray-400 mb-2">
+            {t.threatAnalysis}
+          </h3>
+          <div className="rounded bg-gray-800/50 p-3 space-y-3">
+            {/* Metric bars */}
+            <div className="space-y-2">
+              <ThreatBar
+                label={t.killPressure}
+                value={team.threatProfile.killPressure}
+                color="bg-red-500"
+              />
+              <ThreatBar
+                label={t.threatResistance}
+                value={team.threatProfile.threatResistance}
+                color="bg-cyan-500"
+              />
+              <ThreatBar
+                label={t.answerRate}
+                value={team.threatProfile.answerRate}
+                color="bg-emerald-500"
+              />
+            </div>
+
+            {/* Threat counts */}
+            <div className="flex flex-wrap gap-2 text-xs">
+              {team.threatProfile.unansweredCount > 0 && (
+                <span className="rounded bg-red-600/20 px-2 py-0.5 text-red-300 font-semibold">
+                  {t.unanswered}: {team.threatProfile.unansweredCount}
+                </span>
+              )}
+              {team.threatProfile.criticalGaps > 0 && (
+                <span className="rounded bg-red-700/25 px-2 py-0.5 text-red-200 font-bold border border-red-500/30">
+                  {t.criticalGaps}: {team.threatProfile.criticalGaps}
+                </span>
+              )}
+              {team.threatProfile.criticalThreats > 0 && (
+                <span className="rounded bg-red-500/15 px-2 py-0.5 text-red-400 font-semibold">
+                  {t.critical}: {team.threatProfile.criticalThreats}
+                </span>
+              )}
+              {team.threatProfile.highThreats > 0 && (
+                <span className="rounded bg-orange-500/15 px-2 py-0.5 text-orange-400 font-semibold">
+                  {t.high}: {team.threatProfile.highThreats}
+                </span>
+              )}
+              {team.threatProfile.unansweredCount === 0 && (
+                <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-emerald-400 font-semibold">
+                  {lang === "ja" ? "完全回答" : "All answered"}
+                </span>
+              )}
+            </div>
+
+            {/* Top threats list */}
+            {team.threatProfile.topThreats.length > 0 && (
+              <div>
+                <span className="text-[10px] font-medium text-gray-500 uppercase">
+                  {t.topThreats}
+                </span>
+                <div className="mt-1 space-y-1">
+                  {team.threatProfile.topThreats.map((threat) => (
+                    <div
+                      key={threat.opponent}
+                      className={`flex items-center justify-between text-xs ${
+                        !threat.hasAnswer ? "bg-red-500/5 rounded px-1 -mx-1" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-block w-1.5 h-1.5 rounded-full ${
+                            !threat.hasAnswer
+                              ? "bg-red-400 ring-1 ring-red-400/50"
+                              : threat.threatLevel === "critical"
+                                ? "bg-red-500"
+                                : "bg-orange-500"
+                          }`}
+                        />
+                        <span className={!threat.hasAnswer ? "text-red-200 font-medium" : "text-gray-200"}>
+                          {localizePokemon(threat.opponent, lang)}
+                        </span>
+                        <span className="text-gray-600 text-[10px]">
+                          {threat.usagePct > 0 ? `${threat.usagePct.toFixed(1)}%` : ""}
+                        </span>
+                        <span className="text-gray-500">
+                          {threat.theirBestKoN > 0
+                            ? `${threat.theirBestKoN}HKO→${localizePokemon(threat.theirBestTarget, lang)}`
+                            : ""}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {threat.hasAnswer ? (
+                          <span className="text-emerald-400 text-[10px]">
+                            {t.answer}: {localizePokemon(threat.ourBestMember, lang)}
+                          </span>
+                        ) : (
+                          <span className="text-red-400 text-[10px] font-bold">
+                            {t.noAnswer}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Section 2: Team Members ── */}
       <div>

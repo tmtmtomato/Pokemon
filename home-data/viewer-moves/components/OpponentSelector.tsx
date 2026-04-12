@@ -1,6 +1,6 @@
 import React from "react";
 import type { PoolMember, RankedTeam } from "../../types/team-matchup";
-import { localizePokemon, type Lang } from "../../viewer/i18n";
+import { localizePokemon, comparePokemonName, type Lang } from "../../viewer/i18n";
 
 interface Props {
   opponents: (PoolMember | null)[];
@@ -80,7 +80,7 @@ export default function OpponentSelector({
             <option value="">
               {lang === "ja" ? `スロット${i + 1}` : `Slot ${i + 1}`}
             </option>
-            {pool.map((p) => (
+            {[...pool].sort((a, b) => comparePokemonName(a.name, b.name, lang)).map((p) => (
               <option key={p.name} value={p.name}>
                 {localizePokemon(p.name, lang)}
               </option>

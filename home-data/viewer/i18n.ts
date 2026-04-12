@@ -137,6 +137,23 @@ export function localizeNature(name: string, lang: Lang = "ja"): string {
   return pick(NATURE_JA, name, lang);
 }
 
+/** Nature → boosted/lowered stat labels (HABCDS notation) */
+const NATURE_MODS: Record<string, [string, string]> = {
+  Adamant: ["A","C"], Jolly: ["S","C"], Modest: ["C","A"], Timid: ["S","A"],
+  Bold: ["B","A"], Impish: ["B","C"], Calm: ["D","A"], Careful: ["D","C"],
+  Brave: ["A","S"], Quiet: ["C","S"], Relaxed: ["B","S"], Sassy: ["D","S"],
+  Lonely: ["A","B"], Hasty: ["S","B"], Mild: ["C","B"], Gentle: ["D","B"],
+  Naughty: ["A","D"], Naive: ["S","D"], Rash: ["C","D"], Lax: ["B","D"],
+};
+
+/** Localized nature with +/- stat indicator, e.g. "いじっぱり (+A-C)" */
+export function natureDisplay(name: string, lang: Lang = "ja"): string {
+  const localized = localizeNature(name, lang);
+  const mods = NATURE_MODS[name];
+  if (!mods) return localized;
+  return `${localized} (+${mods[0]}-${mods[1]})`;
+}
+
 /**
  * Return the localized display name for an ability. Falls back to the
  * English name when the dictionary has no entry.

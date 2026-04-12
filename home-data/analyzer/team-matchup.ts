@@ -34,6 +34,9 @@ import type {
   RankedTeam,
   SelectionPattern,
   PokemonTeamStats,
+  ThreatProfile,
+  ThreatEntry,
+  ThreatLevel,
 } from "../types/team-matchup.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,8 +55,17 @@ const TOP_N_TEAMS = 50;
 const SECONDARY_ATTACKER_THRESHOLD = 0.3;
 const SECONDARY_ATTACKER_COVERAGE_NEEDED = 5; // out of 6
 
+// Pool quality gate: exclude Pokemon with fewer moves (no coverage → dead weight)
+const MIN_MOVE_COUNT = 2;
+
+// Team completeness validation: each member must score ≥ this threshold
+// roleScore = 0.5 * atkNiche + 0.5 * defNiche (0-100)
+// At < 25, 84% of members are dead weight (0% selection rate)
+const MIN_MEMBER_ROLE_SCORE = 25;
+
 // Team generation retry limit (to avoid infinite loops with item exclusivity)
 const MAX_TEAM_ATTEMPTS = 200;
+const MAX_VALIDATION_RETRIES = 50_000;
 
 // Self-KO moves (Explosion / Self-Destruct): user faints → 1:1 trade → 50% contribution
 const SELF_KO_MOVES = new Set(["Explosion", "Self-Destruct"]);
@@ -221,14 +233,90 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
   return { matrix, totalCalcs };
 }
 
+// ── Team Completeness Validation ─────────────────────────────────────────────
+
+/**
+ * Validate that every member of a 6-Pokemon team provides meaningful role
+ * complementarity. Rejects teams with "dead weight" members that are outclassed
+ * by other teammates in every matchup.
+ *
+ * For each member, compute a roleScore (0-100):
+ *   atkNiche: fraction of opponents where this member is a top-3 attacker on the team
+ *   defNiche: fraction of opponents where this member uniquely absorbs a threat
+ *             (survives when a teammate gets OHKOd, AND can hit back ≥30%)
+ *   roleScore = 0.5 * atkNiche + 0.5 * defNiche
+ *
+ * If any member's roleScore < MIN_MEMBER_ROLE_SCORE, the team is rejected.
+ */
+function validateTeamCompleteness(
+  members: string[],
+  pool: MetaPokemon[],
+  matrix: DamageMatrix,
+): boolean {
+  const memberSet = new Set(members);
+  const opponents = pool.filter((p) => !memberSet.has(p.name)).map((p) => p.name);
+  const N = opponents.length;
+  if (N === 0) return true;
+
+  for (const me of members) {
+    const others = members.filter((m) => m !== me);
+    let atkNicheCount = 0;
+    let defNicheCount = 0;
+
+    for (const opp of opponents) {
+      // ATK NICHE: Is this member top-3 attacker vs this opponent?
+      const myEntry = matrix[me]?.[opp];
+      const myKoN = myEntry?.koN || 99;
+      const myMaxPct = myEntry?.maxPct || 0;
+
+      let betterCount = 0;
+      for (const o of others) {
+        const e = matrix[o]?.[opp];
+        const oKoN = e?.koN || 99;
+        const oMaxPct = e?.maxPct || 0;
+        if (oKoN < myKoN || (oKoN === myKoN && oMaxPct > myMaxPct)) {
+          betterCount++;
+        }
+      }
+      if (betterCount < 3) atkNicheCount++;
+
+      // DEF NICHE: Does this member provide unique switch-in value vs this opponent?
+      // Criteria: I survive the opponent's best (not OHKOd) while at least one
+      // teammate gets OHKOd, AND I can hit back ≥30%.
+      const oppToMe = matrix[opp]?.[me];
+      const iGetOHKOd = oppToMe && oppToMe.koN === 1 && (oppToMe.koChance ?? 0) >= 0.5;
+      if (!iGetOHKOd && myMaxPct >= 30) {
+        const anyTeammateOHKOd = others.some((o) => {
+          const e = matrix[opp]?.[o];
+          return e && e.koN === 1 && (e.koChance ?? 0) >= 0.5;
+        });
+        if (anyTeammateOHKOd) defNicheCount++;
+      }
+    }
+
+    const roleScore = Math.round(
+      (0.5 * atkNicheCount / N + 0.5 * defNicheCount / N) * 100,
+    );
+
+    if (roleScore < MIN_MEMBER_ROLE_SCORE) {
+      return false; // Early exit: this member is dead weight
+    }
+  }
+
+  return true;
+}
+
 // ── Team Generation ─────────────────────────────────────────────────────────
 
 function generateTeams(
   pool: MetaPokemon[],
   count: number,
   rng: () => number,
-): Team[] {
+  matrix: DamageMatrix,
+): { teams: Team[]; validationRejects: number } {
   const teams: Team[] = [];
+  let validationRejects = 0;
+
   // Mild weighting: Pokemon with higher usage get slight boost
   // weight = 1 + 0.2 * ln(1 + usagePct) — nearly flat but slightly favors popular Pokemon
   const weights = pool.map((p) => 1 + 0.2 * Math.log(1 + p.usagePct));
@@ -285,10 +373,21 @@ function generateTeams(
       continue;
     }
 
+    // Team completeness validation: reject teams with dead-weight members
+    if (!validateTeamCompleteness(members, pool, matrix)) {
+      validationRejects++;
+      if (validationRejects <= MAX_VALIDATION_RETRIES) {
+        t--;
+        continue;
+      }
+      // Safety valve: if we've hit the retry limit, accept despite failure
+      console.warn(`[team-matchup] WARNING: hit validation retry limit (${MAX_VALIDATION_RETRIES}), accepting team`);
+    }
+
     teams.push({ id: `T${String(t + 1).padStart(5, "0")}`, members });
   }
 
-  return teams;
+  return { teams, validationRejects };
 }
 
 // ── Selection Algorithm ─────────────────────────────────────────────────────
@@ -602,6 +701,313 @@ function computePokemonStats(
   return stats.sort((a, b) => b.pickRate - a.pickRate);
 }
 
+// ── Threat Analysis ─────────────────────────────────────────────────────
+
+/**
+ * Classify threat level of a single opponent against a team.
+ * Uses the same logic as moveCalc.ts classifyThreat:
+ *   CRITICAL: ourBestKoN >= 3 AND theirBestKoN <= 2
+ *   HIGH:     ourBestKoN >= 3 OR (theirBestKoN <= 2 AND slower)
+ *   MEDIUM:   ourBestKoN === 2
+ *   LOW:      ourBestKoN === 1
+ */
+function classifyThreatLevel(
+  ourBestKoN: number,
+  theirBestKoN: number,
+  speed: "faster" | "slower" | "tie",
+): ThreatLevel {
+  if (ourBestKoN >= 3 && theirBestKoN <= 2) return "critical";
+  if (ourBestKoN >= 3 || (theirBestKoN <= 2 && speed === "slower")) return "high";
+  if (ourBestKoN === 2) return "medium";
+  return "low";
+}
+
+/**
+ * Compute threat profile for a team against the entire pool using the precomputed damage matrix.
+ *
+ * killPressure (殺意):     How effectively can this team KO pool opponents?
+ * threatResistance (脅威耐性): How safe is this team from pool threats?
+ * answerRate (回答率):      What % of opponents does the team have a reliable answer for?
+ */
+function computeTeamThreatProfile(
+  members: string[],
+  pool: MetaPokemon[],
+  matrix: DamageMatrix,
+): ThreatProfile {
+  const teamSet = new Set(members);
+  const opponents = pool.filter((p) => !teamSet.has(p.name));
+
+  // ── Mega constraint awareness ──
+  // Identify mega-capable members in this team.
+  // Teams can have ≤2 mega-capable Pokemon, but only 1 can be selected per 3v3.
+  // The damage matrix uses mega stats, so non-active megas are overestimated.
+  const megaMembers = new Set<string>();
+  for (const m of members) {
+    const meta = pool.find((p) => p.name === m);
+    if (meta?.builds.some((b) => b.isMega)) megaMembers.add(m);
+  }
+  const hasMegaConstraint = megaMembers.size >= 2;
+
+  // Precompute member speeds for reuse
+  const memberSpeeds = new Map<string, number>();
+  for (const m of members) {
+    const meta = pool.find((p) => p.name === m);
+    memberSpeeds.set(m, meta?.singlesScores?.speedStat ?? 0);
+  }
+
+  // Sort opponents by usage descending to identify top-10 usage mons
+  const opponentsByUsage = [...opponents].sort((a, b) => b.usagePct - a.usagePct);
+  const top10UsageNames = new Set(opponentsByUsage.slice(0, 10).map((p) => p.name));
+
+  let killPressureSum = 0;
+  let threatPenaltySum = 0;
+  let answeredUsageSum = 0;   // usage-weighted answered
+  let totalUsageSum = 0;      // total usage weight
+  let answeredCount = 0;
+  let unansweredCount = 0;
+  let criticalGaps = 0;       // unanswered top-10 usage opponents
+  let criticalThreats = 0;
+  let highThreats = 0;
+  const entries: ThreatEntry[] = [];
+
+  // Track mega-exclusive dependencies for contention check
+  // megaExclusiveAnswers[megaName] = count of opponents answered ONLY by this mega
+  const megaExclusiveAnswers = new Map<string, number>();
+  // megaExclusiveKills[megaName] = kill pressure points that ONLY this mega provides
+  const megaExclusiveKills = new Map<string, number>();
+
+  /** Check if a member meets answer criteria vs an opponent */
+  function meetsAnswerCriteria(me: string, oppName: string, oppSpeed: number): boolean {
+    const meToOpp = matrix[me]?.[oppName];
+    const oppToMe = matrix[oppName]?.[me];
+    if (!meToOpp) return false;
+    const myKoN = meToOpp.koN || 99;
+    if (myKoN > 2) return false; // can't KO in ≤2
+
+    const memberSpeed = memberSpeeds.get(me) ?? 0;
+    const outspeeds = memberSpeed > oppSpeed;
+
+    // Outspeeds and OHKOs (revenge kill)
+    if (outspeeds && myKoN === 1) return true;
+
+    // Survives opponent's best and wins KO race
+    const theirKoNToMe = oppToMe?.koN || 99;
+    if (theirKoNToMe >= 2) {
+      const weWin = outspeeds
+        ? myKoN <= theirKoNToMe
+        : myKoN < theirKoNToMe;
+      if (weWin) return true;
+    }
+    return false;
+  }
+
+  for (const opp of opponents) {
+    const oppSpeed = opp.singlesScores?.speedStat ?? 0;
+
+    // ── Our best damage (mega-aware) ──
+    // Track both overall best and best non-mega alternative
+    let ourBestKoN = 99;
+    let ourBestMember = "";
+    let nonMegaBestKoN = 99;
+    for (const me of members) {
+      const entry = matrix[me]?.[opp.name];
+      if (!entry) continue;
+      const koN = entry.koN || 99;
+      if (koN < ourBestKoN) {
+        ourBestKoN = koN;
+        ourBestMember = me;
+      }
+      if (!megaMembers.has(me) && koN < nonMegaBestKoN) {
+        nonMegaBestKoN = koN;
+      }
+    }
+
+    // Their best: which team member takes the most damage?
+    let theirBestKoN = 99;
+    let theirBestTarget = "";
+    for (const me of members) {
+      const entry = matrix[opp.name]?.[me];
+      if (!entry) continue;
+      const koN = entry.koN || 99;
+      if (koN < theirBestKoN) {
+        theirBestKoN = koN;
+        theirBestTarget = me;
+      }
+    }
+
+    // Speed comparison (team-level)
+    const ourFastestRelevant = Math.max(...members.map((m) => memberSpeeds.get(m) ?? 0));
+    const speed: "faster" | "slower" | "tie" =
+      ourFastestRelevant > oppSpeed ? "faster" :
+      ourFastestRelevant < oppSpeed ? "slower" : "tie";
+
+    const threatLevel = classifyThreatLevel(ourBestKoN, theirBestKoN, speed);
+
+    // ── Kill pressure (mega-aware) ──
+    // Score based on ourBest, but track if this kill is mega-exclusive
+    let killPoints = 0;
+    if (ourBestKoN === 1) killPoints = 3;
+    else if (ourBestKoN === 2) killPoints = 2;
+    else if (ourBestKoN === 3) killPoints = 1;
+    killPressureSum += killPoints;
+
+    // If the best killer is mega and no non-mega alternative within same tier
+    if (hasMegaConstraint && megaMembers.has(ourBestMember) && killPoints > 0) {
+      let nonMegaKillPoints = 0;
+      if (nonMegaBestKoN === 1) nonMegaKillPoints = 3;
+      else if (nonMegaBestKoN === 2) nonMegaKillPoints = 2;
+      else if (nonMegaBestKoN === 3) nonMegaKillPoints = 1;
+
+      const lostPoints = killPoints - nonMegaKillPoints;
+      if (lostPoints > 0) {
+        megaExclusiveKills.set(
+          ourBestMember,
+          (megaExclusiveKills.get(ourBestMember) ?? 0) + lostPoints,
+        );
+      }
+    }
+
+    // Threat penalty
+    const penaltyMap: Record<ThreatLevel, number> = { critical: 3, high: 2, medium: 1, low: 0 };
+    threatPenaltySum += penaltyMap[threatLevel];
+    if (threatLevel === "critical") criticalThreats++;
+    if (threatLevel === "high") highThreats++;
+
+    // ── Answer check (mega-aware) ──
+    // Prefer non-mega answers. Track if answer is mega-exclusive.
+    let hasAnswer = false;
+    let answerIsNonMega = false;
+    let answeringMega: string | null = null;
+
+    // First pass: look for non-mega answers
+    for (const me of members) {
+      if (megaMembers.has(me)) continue;
+      if (meetsAnswerCriteria(me, opp.name, oppSpeed)) {
+        hasAnswer = true;
+        answerIsNonMega = true;
+        break;
+      }
+    }
+
+    // Second pass: if no non-mega answer, try mega answers
+    if (!hasAnswer) {
+      for (const me of members) {
+        if (!megaMembers.has(me)) continue;
+        if (meetsAnswerCriteria(me, opp.name, oppSpeed)) {
+          hasAnswer = true;
+          answeringMega = me;
+          break;
+        }
+      }
+    }
+
+    const oppUsage = opp.usagePct;
+    totalUsageSum += oppUsage;
+
+    if (hasAnswer) {
+      answeredCount++;
+      answeredUsageSum += oppUsage;
+    } else {
+      unansweredCount++;
+      if (top10UsageNames.has(opp.name)) criticalGaps++;
+    }
+
+    // Track mega-exclusive answer dependency
+    if (hasMegaConstraint && hasAnswer && !answerIsNonMega && answeringMega) {
+      megaExclusiveAnswers.set(
+        answeringMega,
+        (megaExclusiveAnswers.get(answeringMega) ?? 0) + 1,
+      );
+    }
+
+    entries.push({
+      opponent: opp.name,
+      usagePct: oppUsage,
+      threatLevel,
+      ourBestKoN: ourBestKoN === 99 ? 0 : ourBestKoN,
+      ourBestMember,
+      theirBestKoN: theirBestKoN === 99 ? 0 : theirBestKoN,
+      theirBestTarget,
+      hasAnswer,
+    });
+  }
+
+  // ── Mega contention adjustment ──
+  // If 2+ different megas have exclusive dependencies, there's a selection conflict:
+  // you can only bring 1 mega per 3v3, so one group's exclusive answers are lost.
+  // Conservative estimate: subtract the SMALLER group (best-case mega choice).
+  let megaContestedAnswers = 0;
+  let megaContestedKillPoints = 0;
+
+  if (hasMegaConstraint && megaExclusiveAnswers.size >= 2) {
+    const counts = [...megaExclusiveAnswers.values()].sort((a, b) => a - b);
+    megaContestedAnswers = counts[0]; // the smaller group is lost
+    answeredCount = Math.max(0, answeredCount - megaContestedAnswers);
+    // Also subtract contested usage weight (approximate: use average opponent usage)
+    const avgUsage = totalUsageSum / (opponents.length || 1);
+    answeredUsageSum = Math.max(0, answeredUsageSum - megaContestedAnswers * avgUsage);
+  }
+
+  if (hasMegaConstraint && megaExclusiveKills.size >= 2) {
+    const points = [...megaExclusiveKills.values()].sort((a, b) => a - b);
+    megaContestedKillPoints = points[0]; // the smaller group's extra points are lost
+    killPressureSum = Math.max(0, killPressureSum - megaContestedKillPoints);
+  }
+
+  const oppCount = opponents.length || 1;
+  const maxKillPressure = 3 * oppCount;
+  const maxThreatPenalty = 3 * oppCount;
+
+  const killPressure = Math.round((killPressureSum / maxKillPressure) * 100);
+  const threatResistance = Math.round((1 - threatPenaltySum / maxThreatPenalty) * 100);
+
+  // Usage-weighted answer rate: high-usage unanswered opponents penalize much harder
+  const answerRate = totalUsageSum > 0
+    ? Math.round((answeredUsageSum / totalUsageSum) * 100)
+    : Math.round((answeredCount / oppCount) * 100);
+
+  // Combined dominance score: kill intent + safety + answer coverage
+  // answerRate weight increased from 20% → 35% to heavily punish unanswered gaps
+  let dominanceScore = Math.round(
+    0.30 * killPressure + 0.30 * threatResistance + 0.40 * answerRate,
+  );
+
+  // Critical gap penalty: unanswered top-10 usage opponents are devastating
+  // Each critical gap applies a multiplicative penalty (e.g., 3 gaps → 0.85^3 ≈ 0.61)
+  if (criticalGaps > 0) {
+    const gapPenalty = Math.pow(0.85, criticalGaps);
+    dominanceScore = Math.round(dominanceScore * gapPenalty);
+  }
+
+  // Top threats: unanswered first (sorted by usage), then answered critical/high
+  const topThreats = entries
+    .filter((e) => e.threatLevel === "critical" || e.threatLevel === "high" || !e.hasAnswer)
+    .sort((a, b) => {
+      // Unanswered always first
+      if (!a.hasAnswer && b.hasAnswer) return -1;
+      if (a.hasAnswer && !b.hasAnswer) return 1;
+      // Within same answer status: sort by usage (most common threats first)
+      const usageDiff = b.usagePct - a.usagePct;
+      if (Math.abs(usageDiff) > 0.001) return usageDiff;
+      // Tiebreak: threat level
+      const order: Record<ThreatLevel, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+      return order[a.threatLevel] - order[b.threatLevel];
+    })
+    .slice(0, 8);
+
+  return {
+    killPressure,
+    threatResistance,
+    answerRate,
+    dominanceScore,
+    criticalThreats,
+    highThreats,
+    unansweredCount,
+    criticalGaps,
+    topThreats,
+  };
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 function main() {
@@ -631,6 +1037,7 @@ function main() {
     const builds: BuildConfig[] = (rp.builds as any[]).map((b: any) => b.config);
     const moves: string[] = rp.builds[0]?.moves ?? [];
     if (builds.length === 0 || moves.length === 0) continue;
+    if (moves.length < MIN_MOVE_COUNT) continue; // Pool quality gate
 
     allMeta.push({
       name: rp.name,
@@ -652,7 +1059,9 @@ function main() {
     });
   }
 
-  console.log(`[1/6] Pool: ${allMeta.length} Pokemon (from singles ranking)`);
+  const originalPoolSize = (singlesData.pokemon as any[]).length;
+  const poolFiltered = originalPoolSize - allMeta.length;
+  console.log(`[1/6] Pool: ${allMeta.length} Pokemon (${poolFiltered} filtered: <${MIN_MOVE_COUNT} moves)`);
 
   // ─── Phase 2: Damage matrix ──────────────────────────────────────────
 
@@ -668,9 +1077,9 @@ function main() {
 
   // ─── Phase 3: Generate teams (with item exclusivity) ──────────────────
 
-  console.log(`[3/6] Generating ${totalTeams} teams (item exclusivity enabled)...`);
-  const teams = generateTeams(allMeta, totalTeams, rng);
-  console.log(`  Generated ${teams.length} teams`);
+  console.log(`[3/6] Generating ${totalTeams} teams (item exclusivity + completeness validation)...`);
+  const { teams, validationRejects } = generateTeams(allMeta, totalTeams, rng, matrix);
+  console.log(`  Generated ${teams.length} teams (${validationRejects} rejected for dead-weight members)`);
 
   // ─── Phase 4: Round-robin evaluation (max 1 mega per selection) ───────
 
@@ -742,11 +1151,11 @@ function main() {
 
   console.log(`  Total matchups: ${totalMatchups}`);
 
-  // ─── Phase 5: Ranking ────────────────────────────────────────────────
+  // ─── Phase 5: Ranking with threat analysis ─────────────────────────
 
-  console.log(`[5/6] Ranking teams...`);
+  console.log(`[5/6] Ranking teams (with threat analysis)...`);
 
-  // Build ranked team list
+  // Build ranked team list with threat profiles
   const rankedTeams: RankedTeam[] = teams.map((team, ti) => {
     const totalGames = teamWins[ti] + teamLosses[ti] + teamDraws[ti];
     const winRate = totalGames > 0 ? teamWins[ti] / totalGames : 0;
@@ -762,6 +1171,9 @@ function main() {
         winRate: val.count > 0 ? round1((val.wins / val.count) * 100) / 100 : 0,
       }));
 
+    // Compute threat profile for this team vs entire pool
+    const threatProfile = computeTeamThreatProfile(team.members, allMeta, matrix);
+
     return {
       rank: 0,
       teamId: team.id,
@@ -776,28 +1188,35 @@ function main() {
         offensiveTypes: getTeamOffensiveTypes(team.members, allMeta),
         defensiveWeaks: getTeamDefensiveWeaks(team.members),
       },
+      threatProfile,
     };
   });
 
-  // Sort by win rate, then avg score
-  rankedTeams.sort((a, b) => b.winRate - a.winRate || b.avgScore - a.avgScore);
+  // Sort by combined score: winRate (60%) + dominanceScore (40%)
+  // This promotes teams with high kill pressure AND low threats
+  rankedTeams.sort((a, b) => {
+    const scoreA = 0.6 * (a.winRate * 100) + 0.4 * (a.threatProfile?.dominanceScore ?? 0);
+    const scoreB = 0.6 * (b.winRate * 100) + 0.4 * (b.threatProfile?.dominanceScore ?? 0);
+    return scoreB - scoreA || b.winRate - a.winRate;
+  });
   const topTeams = rankedTeams.slice(0, TOP_N_TEAMS);
   for (let i = 0; i < topTeams.length; i++) topTeams[i].rank = i + 1;
 
   // Print top 10
-  console.log(`\n=== Top 10 Teams ===`);
+  console.log(`\n=== Top 10 Teams (殺意×脅威耐性) ===`);
   for (const t of topTeams.slice(0, 10)) {
+    const tp = t.threatProfile;
+    const combined = tp ? (0.6 * (t.winRate * 100) + 0.4 * tp.dominanceScore).toFixed(1) : "?";
     console.log(
-      `  #${t.rank} WR=${(t.winRate * 100).toFixed(1)}% ` +
-      `[${t.members.join(", ")}] ` +
-      `(${t.wins}W/${t.losses}L/${t.draws}D)`,
+      `  #${t.rank} Combined=${combined} WR=${(t.winRate * 100).toFixed(1)}% ` +
+      `Kill=${tp?.killPressure ?? "?"}  Safe=${tp?.threatResistance ?? "?"} ` +
+      `Ans=${tp?.answerRate ?? "?"}% ` +
+      `Unans=${tp?.unansweredCount ?? "?"} Gaps=${tp?.criticalGaps ?? 0} ` +
+      `Crit=${tp?.criticalThreats ?? 0} High=${tp?.highThreats ?? 0}`,
     );
-    if (t.commonSelections[0]) {
-      console.log(
-        `       Selection: ${t.commonSelections[0].members.join("+")} ` +
-        `(${t.commonSelections[0].frequency}x, WR=${(t.commonSelections[0].winRate * 100).toFixed(1)}%)`,
-      );
-    }
+    console.log(
+      `       [${t.members.join(", ")}]`,
+    );
   }
 
   // ─── Phase 6: Pokemon stats + Output ─────────────────────────────────
@@ -841,6 +1260,8 @@ function main() {
       totalTeams,
       gamesPerTeam,
       poolSize: allMeta.length,
+      poolFiltered,
+      teamsRejected: validationRejects,
     },
     pool: poolMembers,
     damageMatrix: matrix,
@@ -855,6 +1276,10 @@ function main() {
   console.log(`Written to ${outPath} (${sizeKB}KB)`);
   console.log(`  Pool: ${allMeta.length}, Matrix calcs: ${totalCalcs}, Matchups: ${totalMatchups}`);
   console.log(`  Top team WR: ${(topTeams[0]?.winRate * 100).toFixed(1)}%`);
+  if (topTeams[0]?.threatProfile) {
+    const tp = topTeams[0].threatProfile;
+    console.log(`  Top team dominance: Kill=${tp.killPressure} Safe=${tp.threatResistance} Ans=${tp.answerRate}%`);
+  }
 
   // Print Pokemon stats
   console.log(`\n=== Pokemon Popularity in Top 50 Teams ===`);

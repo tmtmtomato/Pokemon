@@ -24,9 +24,11 @@ export default defineConfig({
                 ? { matchup: 'matchup.html' }
                 : entry === 'moves'
                   ? { moves: 'moves.html' }
-                  : entry === 'ml'
-                  ? { ml: 'ml.html' }
-                  : { calc: 'index.html' },
+                  : entry === 'firepower'
+                    ? { firepower: 'firepower.html' }
+                    : entry === 'ml'
+                    ? { ml: 'ml.html' }
+                    : { calc: 'index.html' },
     },
   },
 });
