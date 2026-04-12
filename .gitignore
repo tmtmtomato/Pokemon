@@ -10,4 +10,7 @@ scripts/pokesol-*.png
 scripts/pokesol-initial.png
 .claude/
 home-data/storage/
+
+# Allow pre-built single-file viewers for GitHub Pages
+!build/firepower.html
 public/sprites/
