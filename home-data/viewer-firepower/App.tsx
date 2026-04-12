@@ -1,8 +1,9 @@
 /**
  * Champions Firepower Ranking Viewer — all-moves edition.
  *
- * Each Pokemon shows ALL learnable attack moves with firepower index.
- * Click a Pokemon row to expand / collapse its move list.
+ * Two view modes:
+ *   - "pokemon": Grouped by Pokemon, click to expand move list (original)
+ *   - "move": Flat list of every Pokemon×Move combo, sorted by firepower index
  */
 
 import { useMemo, useState, useEffect } from "react";
@@ -66,7 +67,34 @@ interface RankingData {
   ranking: PokemonEntry[];
 }
 
+// Flat row for move-level view
+interface FlatMoveRow {
+  pokemon: string;
+  types: string[];
+  ability: string;
+  isMega: boolean;
+  move: MoveEntry;
+}
+
 const DATA: RankingData = rankingJson as unknown as RankingData;
+
+// Pre-compute flat move list (sorted by firepower index descending)
+const ALL_FLAT_MOVES: FlatMoveRow[] = (() => {
+  const rows: FlatMoveRow[] = [];
+  for (const r of DATA.ranking) {
+    for (const m of r.moves) {
+      rows.push({
+        pokemon: r.pokemon,
+        types: r.types,
+        ability: r.ability,
+        isMega: r.isMega,
+        move: m,
+      });
+    }
+  }
+  rows.sort((a, b) => b.move.firepowerIndex - a.move.firepowerIndex);
+  return rows;
+})();
 
 // ===== Type colors =====
 const TYPE_COLORS: Record<string, string> = {
@@ -103,6 +131,8 @@ function Bar({ value, max, color }: { value: number; max: number; color: string 
   );
 }
 
+type ViewMode = "pokemon" | "move";
+
 // ===== Main App =====
 export default function App() {
   const { lang, toggleLang } = useLang();
@@ -111,7 +141,10 @@ export default function App() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [megaFilter, setMegaFilter] = useState<string>("all");
+  const [moveTypeFilter, setMoveTypeFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<ViewMode>("pokemon");
+  const [showCount, setShowCount] = useState(200);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -126,9 +159,13 @@ export default function App() {
     }
   }, [dark]);
 
-  const maxIndex = DATA.ranking[0]?.bestFirepowerIndex ?? 1;
+  // Reset show count when filters change
+  useEffect(() => { setShowCount(200); }, [search, typeFilter, catFilter, megaFilter, moveTypeFilter, viewMode]);
 
-  const filtered = useMemo(() => {
+  const maxIndex = ALL_FLAT_MOVES[0]?.move.firepowerIndex ?? 1;
+
+  // ===== Pokemon-level filtering =====
+  const filteredPokemon = useMemo(() => {
     let result = DATA.ranking;
     if (search) {
       const q = search.toLowerCase();
@@ -153,9 +190,42 @@ export default function App() {
     return result;
   }, [search, typeFilter, catFilter, megaFilter]);
 
+  // ===== Move-level flat filtering =====
+  const filteredMoves = useMemo(() => {
+    let result = ALL_FLAT_MOVES;
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((r) => {
+        const key = localizedSearchKey(r.pokemon).toLowerCase();
+        return key.includes(q);
+      });
+    }
+    if (typeFilter !== "all") {
+      result = result.filter((r) => r.types.includes(typeFilter));
+    }
+    if (catFilter !== "all") {
+      result = result.filter((r) => r.move.category === catFilter);
+    }
+    if (megaFilter === "mega") {
+      result = result.filter((r) => r.isMega);
+    } else if (megaFilter === "normal") {
+      result = result.filter((r) => !r.isMega);
+    }
+    if (moveTypeFilter !== "all") {
+      result = result.filter((r) => r.move.moveType === moveTypeFilter);
+    }
+    return result;
+  }, [search, typeFilter, catFilter, megaFilter, moveTypeFilter]);
+
   const allTypes = useMemo(() => {
     const set = new Set<string>();
     DATA.ranking.forEach((r) => r.types.forEach((t) => set.add(t)));
+    return [...set].sort();
+  }, []);
+
+  const allMoveTypes = useMemo(() => {
+    const set = new Set<string>();
+    ALL_FLAT_MOVES.forEach((r) => set.add(r.move.moveType));
     return [...set].sort();
   }, []);
 
@@ -169,11 +239,13 @@ export default function App() {
   };
 
   const expandAll = () => {
-    const keys = filtered.map((r) => `${r.pokemon}-${r.isMega}`);
+    const keys = filteredPokemon.map((r) => `${r.pokemon}-${r.isMega}`);
     setExpanded(new Set(keys));
   };
 
   const collapseAll = () => setExpanded(new Set());
+
+  const displayedMoves = filteredMoves.slice(0, showCount);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -181,7 +253,7 @@ export default function App() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold">
-            {lang === "ja" ? "火力指数ランキング — 全攻撃技" : "Firepower Index — All Moves"}
+            {lang === "ja" ? "火力指数ランキング" : "Firepower Index Ranking"}
           </h1>
           <p className="text-sm text-gray-400 mt-1">
             {lang === "ja"
@@ -199,6 +271,30 @@ export default function App() {
         </div>
       </div>
 
+      {/* View mode toggle */}
+      <div className="flex gap-1 mb-4">
+        <button
+          onClick={() => setViewMode("pokemon")}
+          className={`px-4 py-1.5 text-sm rounded-l font-medium transition-colors ${
+            viewMode === "pokemon"
+              ? "bg-orange-600 text-white"
+              : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+          }`}
+        >
+          {lang === "ja" ? "ポケモン別" : "By Pokemon"}
+        </button>
+        <button
+          onClick={() => setViewMode("move")}
+          className={`px-4 py-1.5 text-sm rounded-r font-medium transition-colors ${
+            viewMode === "move"
+              ? "bg-orange-600 text-white"
+              : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+          }`}
+        >
+          {lang === "ja" ? "技別" : "By Move"}
+        </button>
+      </div>
+
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
         <input
@@ -210,9 +306,16 @@ export default function App() {
         />
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
           className="px-3 py-1.5 rounded bg-gray-800 border border-gray-700 text-sm">
-          <option value="all">{lang === "ja" ? "全タイプ" : "All Types"}</option>
+          <option value="all">{lang === "ja" ? "ポケモンタイプ" : "Pokemon Type"}</option>
           {allTypes.map((t) => <option key={t} value={t}>{localizeType(t, lang)}</option>)}
         </select>
+        {viewMode === "move" && (
+          <select value={moveTypeFilter} onChange={(e) => setMoveTypeFilter(e.target.value)}
+            className="px-3 py-1.5 rounded bg-gray-800 border border-gray-700 text-sm">
+            <option value="all">{lang === "ja" ? "技タイプ" : "Move Type"}</option>
+            {allMoveTypes.map((t) => <option key={t} value={t}>{localizeType(t, lang)}</option>)}
+          </select>
+        )}
         <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)}
           className="px-3 py-1.5 rounded bg-gray-800 border border-gray-700 text-sm">
           <option value="all">{lang === "ja" ? "物理/特殊" : "Phys/Spec"}</option>
@@ -226,72 +329,123 @@ export default function App() {
           <option value="normal">{lang === "ja" ? "非メガのみ" : "Non-Mega Only"}</option>
         </select>
         <span className="text-sm text-gray-400 self-center">
-          {filtered.length} / {DATA.ranking.length}
+          {viewMode === "pokemon"
+            ? `${filteredPokemon.length} / ${DATA.ranking.length}`
+            : `${filteredMoves.length.toLocaleString()} ${lang === "ja" ? "件" : "entries"}`}
         </span>
-        <button onClick={expandAll} className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600">
-          {lang === "ja" ? "全展開" : "Expand"}
-        </button>
-        <button onClick={collapseAll} className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600">
-          {lang === "ja" ? "全閉じ" : "Collapse"}
-        </button>
+        {viewMode === "pokemon" && (
+          <>
+            <button onClick={expandAll} className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600">
+              {lang === "ja" ? "全展開" : "Expand"}
+            </button>
+            <button onClick={collapseAll} className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600">
+              {lang === "ja" ? "全閉じ" : "Collapse"}
+            </button>
+          </>
+        )}
       </div>
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-gray-700 text-left text-gray-400">
-              <th className="py-2 px-2 w-10">#</th>
-              <th className="py-2 px-2">{lang === "ja" ? "ポケモン" : "Pokemon"}</th>
-              <th className="py-2 px-2">{lang === "ja" ? "タイプ" : "Type"}</th>
-              <th className="py-2 px-2">{lang === "ja" ? "特性" : "Ability"}</th>
-              <th className="py-2 px-2">{lang === "ja" ? "最強技" : "Best Move"}</th>
-              <th className="py-2 px-2">{lang === "ja" ? "持ち物" : "Item"}</th>
-              <th className="py-2 px-2">{lang === "ja" ? "実効BP" : "Eff.BP"}</th>
-              <th className="py-2 px-2 w-56">{lang === "ja" ? "火力指数" : "Index"}</th>
-              <th className="py-2 px-2 w-10">{lang === "ja" ? "技数" : "#"}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r) => {
-              const key = `${r.pokemon}-${r.isMega}`;
-              const isOpen = expanded.has(key);
-              const best = r.moves[0];
-              return (
-                <PokemonRow
-                  key={key}
-                  entry={r}
-                  best={best}
-                  isOpen={isOpen}
-                  maxIndex={maxIndex}
-                  lang={lang}
-                  catFilter={catFilter}
-                  onToggle={() => toggleExpand(key)}
-                />
-              );
-            })}
-          </tbody>
-        </table>
+        {viewMode === "pokemon" ? (
+          <PokemonTable
+            filtered={filteredPokemon}
+            expanded={expanded}
+            maxIndex={maxIndex}
+            lang={lang}
+            catFilter={catFilter}
+            onToggle={toggleExpand}
+          />
+        ) : (
+          <MoveTable
+            rows={displayedMoves}
+            maxIndex={maxIndex}
+            lang={lang}
+          />
+        )}
       </div>
+
+      {/* Load more for move view */}
+      {viewMode === "move" && showCount < filteredMoves.length && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => setShowCount((c) => c + 200)}
+            className="px-6 py-2 text-sm rounded bg-gray-800 hover:bg-gray-700 border border-gray-700"
+          >
+            {lang === "ja"
+              ? `さらに表示 (${Math.min(200, filteredMoves.length - showCount)}件)`
+              : `Load more (${Math.min(200, filteredMoves.length - showCount)})`}
+          </button>
+          <span className="ml-3 text-xs text-gray-500">
+            {showCount.toLocaleString()} / {filteredMoves.length.toLocaleString()}
+          </span>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="mt-4 text-xs text-gray-500 space-y-1">
-        <p>* = {lang === "ja" ? "反動技" : "Recoil move"} | † = {lang === "ja" ? "-ate変換技" : "-ate converted"}</p>
+        <p>* = {lang === "ja" ? "反動技" : "Recoil move"} | † = {lang === "ja" ? "-ate変換技" : "-ate converted"} | × = {lang === "ja" ? "連続技" : "Multi-hit"}</p>
         <p>{lang === "ja"
           ? "メガシンカ: メガストーン固定 (アイテム補正なし) | 非メガ: タイプ強化アイテム (~1.2x)"
           : "Mega: Mega Stone (no item mod) | Non-mega: Type-boost item (~1.2x)"}</p>
         <p>{lang === "ja"
           ? "根性持ち: かえんだま (1.5x Atk + Facade 2x) と比較し高い方を採用"
           : "Guts users: compared with Flame Orb (1.5x Atk + Facade 2x), best picked"}</p>
-        <p>{lang === "ja"
-          ? "クリックで全攻撃技を展開表示"
-          : "Click a row to expand all attack moves"}</p>
       </div>
     </div>
   );
 }
 
-// ===== Pokemon row + expandable moves (fragment to avoid <> in table) =====
+// ===== Pokemon-grouped table (original view) =====
+function PokemonTable({
+  filtered, expanded, maxIndex, lang, catFilter, onToggle,
+}: {
+  filtered: PokemonEntry[];
+  expanded: Set<string>;
+  maxIndex: number;
+  lang: Lang;
+  catFilter: string;
+  onToggle: (key: string) => void;
+}) {
+  return (
+    <table className="w-full text-sm border-collapse">
+      <thead>
+        <tr className="border-b border-gray-700 text-left text-gray-400">
+          <th className="py-2 px-2 w-10">#</th>
+          <th className="py-2 px-2">{lang === "ja" ? "ポケモン" : "Pokemon"}</th>
+          <th className="py-2 px-2">{lang === "ja" ? "タイプ" : "Type"}</th>
+          <th className="py-2 px-2">{lang === "ja" ? "特性" : "Ability"}</th>
+          <th className="py-2 px-2">{lang === "ja" ? "最強技" : "Best Move"}</th>
+          <th className="py-2 px-2">{lang === "ja" ? "持ち物" : "Item"}</th>
+          <th className="py-2 px-2">{lang === "ja" ? "実効BP" : "Eff.BP"}</th>
+          <th className="py-2 px-2 w-56">{lang === "ja" ? "火力指数" : "Index"}</th>
+          <th className="py-2 px-2 w-10">{lang === "ja" ? "技数" : "#"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.map((r) => {
+          const key = `${r.pokemon}-${r.isMega}`;
+          const isOpen = expanded.has(key);
+          const best = r.moves[0];
+          return (
+            <PokemonRow
+              key={key}
+              entry={r}
+              best={best}
+              isOpen={isOpen}
+              maxIndex={maxIndex}
+              lang={lang}
+              catFilter={catFilter}
+              onToggle={() => onToggle(key)}
+            />
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// ===== Pokemon row + expandable moves =====
 function PokemonRow({
   entry: r, best, isOpen, maxIndex, lang, catFilter, onToggle,
 }: {
@@ -349,7 +503,7 @@ function PokemonRow({
       {isOpen && (
         <tr>
           <td colSpan={9} className="p-0">
-            <MoveList moves={r.moves} maxIndex={maxIndex} isMega={r.isMega} lang={lang} catFilter={catFilter} />
+            <ExpandedMoveList moves={r.moves} maxIndex={maxIndex} isMega={r.isMega} lang={lang} catFilter={catFilter} />
           </td>
         </tr>
       )}
@@ -357,8 +511,8 @@ function PokemonRow({
   );
 }
 
-// ===== Move list sub-table =====
-function MoveList({
+// ===== Expanded move list (sub-table in pokemon view) =====
+function ExpandedMoveList({
   moves, maxIndex, isMega, lang, catFilter,
 }: {
   moves: MoveEntry[];
@@ -425,5 +579,83 @@ function MoveList({
         </tbody>
       </table>
     </div>
+  );
+}
+
+// ===== Flat move-level table =====
+function MoveTable({
+  rows, maxIndex, lang,
+}: {
+  rows: FlatMoveRow[];
+  maxIndex: number;
+  lang: Lang;
+}) {
+  return (
+    <table className="w-full text-sm border-collapse">
+      <thead>
+        <tr className="border-b border-gray-700 text-left text-gray-400">
+          <th className="py-2 px-2 w-10">#</th>
+          <th className="py-2 px-2">{lang === "ja" ? "ポケモン" : "Pokemon"}</th>
+          <th className="py-2 px-2">{lang === "ja" ? "特性" : "Ability"}</th>
+          <th className="py-2 px-2">{lang === "ja" ? "技" : "Move"}</th>
+          <th className="py-2 px-2">{lang === "ja" ? "技タイプ" : "Move Type"}</th>
+          <th className="py-2 px-2 text-right">BP</th>
+          <th className="py-2 px-2">{lang === "ja" ? "持ち物" : "Item"}</th>
+          <th className="py-2 px-2">{lang === "ja" ? "実数値" : "Stat"}</th>
+          <th className="py-2 px-2 text-right">{lang === "ja" ? "実効BP" : "Eff.BP"}</th>
+          <th className="py-2 px-2 w-48">{lang === "ja" ? "火力指数" : "Index"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, i) => {
+          const m = r.move;
+          return (
+            <tr key={`${r.pokemon}-${r.isMega}-${m.moveName}-${m.item}-${i}`}
+              className="border-b border-gray-800 hover:bg-gray-900/50">
+              <td className="py-1 px-2 text-gray-500 tabular-nums">{i + 1}</td>
+              <td className="py-1 px-2 font-medium whitespace-nowrap">
+                {localizePokemon(r.pokemon, lang)}
+                {r.isMega && <span className="ml-1 text-xs text-purple-400 font-normal">M</span>}
+              </td>
+              <td className="py-1 px-2 text-gray-300 whitespace-nowrap text-xs">
+                {localizeAbility(r.ability, lang)}
+              </td>
+              <td className="py-1 px-2 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1">
+                  <span>
+                    {localizeMove(m.moveName, lang)}
+                    {m.hasRecoil && <span className="text-red-400">*</span>}
+                    {m.ateConvert && <span className="text-purple-400">†</span>}
+                    {m.multiHit && <span className="text-yellow-400">×</span>}
+                  </span>
+                  <CatBadge cat={m.category} />
+                </span>
+              </td>
+              <td className="py-1 px-2 whitespace-nowrap">
+                <TypeBadge type={m.moveType} lang={lang} />
+                {m.isStab && <span className="ml-1 text-yellow-500 text-[9px]">STAB</span>}
+              </td>
+              <td className="py-1 px-2 text-right tabular-nums">{m.basePower}</td>
+              <td className="py-1 px-2 text-gray-300 text-xs whitespace-nowrap">
+                {r.isMega ? "-" : localizeItem(m.item, lang)}
+              </td>
+              <td className="py-1 px-2 whitespace-nowrap tabular-nums text-xs">
+                <span className="text-gray-500">{m.statName}</span>
+                <span className="ml-1">{m.statValue}</span>
+              </td>
+              <td className="py-1 px-2 text-right tabular-nums">{m.effectiveBP}</td>
+              <td className="py-1 px-2">
+                <div className="flex items-center gap-2">
+                  <Bar value={m.firepowerIndex} max={maxIndex} color="bg-orange-500" />
+                  <span className="text-xs tabular-nums w-16 text-right">
+                    {m.firepowerIndex.toLocaleString()}
+                  </span>
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
