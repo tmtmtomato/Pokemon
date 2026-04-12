@@ -4,7 +4,8 @@ on:
   push:
     branches: [master]
     paths:
-      - build/firepower.html
+      - index.html
+      - build/*.html
       - build/sprites/pokemon/menu/**
   workflow_dispatch:
 
@@ -28,10 +29,14 @@ jobs:
 
       - name: Prepare pages
         run: |
-          mkdir -p _site/sprites/pokemon/menu
-          cp build/firepower.html _site/index.html
-          cp build/firepower.html _site/firepower.html
-          cp -r build/sprites/pokemon/menu/* _site/sprites/pokemon/menu/
+          mkdir -p _site/build/sprites/pokemon/menu
+          cp index.html _site/index.html
+          for f in build/*.html; do
+            cp "$f" "_site/$f"
+          done
+          if [ -d build/sprites/pokemon/menu ]; then
+            cp -r build/sprites/pokemon/menu/* _site/build/sprites/pokemon/menu/
+          fi
 
       - uses: actions/upload-pages-artifact@v3
         with:
