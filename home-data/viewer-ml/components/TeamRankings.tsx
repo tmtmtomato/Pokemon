@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import type { TeamRanking } from "../../types/ml-viewer";
 import { useLang } from "../../viewer/LanguageContext";
 import { localizePokemon } from "../../viewer/i18n";
+import { PokemonIcon } from "../../viewer/PokemonIcon";
 import { fmtPct } from "../utils";
 
 type SortKey = "predicted" | "observed" | "count";
@@ -85,8 +86,9 @@ export function TeamRankings({ rankings }: Props) {
                     {team.species.map((sp) => (
                       <span
                         key={sp}
-                        className="rounded bg-gray-800 px-1.5 py-0.5 text-[11px] text-gray-200"
+                        className="rounded bg-gray-800 px-1.5 py-0.5 text-[11px] text-gray-200 inline-flex items-center gap-0.5"
                       >
+                        <PokemonIcon name={sp} size="w-4 h-4" />
                         {localizePokemon(sp, lang)}
                       </span>
                     ))}

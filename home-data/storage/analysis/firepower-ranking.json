@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-12T14:36:28.696Z",
+  "generatedAt": "2026-04-12T16:32:44.490Z",
   "description": "Pokemon Champions 火力指数ランキング (全攻撃技)",
   "formula": "実数値 × 実効威力 (BP × STAB × 特性 × アイテム)",
   "assumptions": {

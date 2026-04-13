@@ -21,7 +21,8 @@
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "node:url";
-import { calculate, Pokemon, Move, Field } from "../../src/index.js";
+import { calculate, Pokemon, Move, Field, getEffectiveness } from "../../src/index.js";
+import type { TypeName } from "../../src/types.js";
 import { getSpecies, getMove as getMoveData } from "../../src/data/index.js";
 import type {
   TeamMatchupResult,
@@ -75,6 +76,80 @@ const SELF_KO_PENALTY = 0.5;
 const SWITCH_IN_PENALTY_POKEMON = new Set(["Palafin-Hero"]);
 const SWITCH_IN_PENALTY = 0.8;
 
+// ── Mega Pool Split ─────────────────────────────────────────────────────────
+// Mega-capable Pokemon are split into two pool entries:
+//   "Garchomp"       → non-mega build (base stats, competitive item)
+//   "Garchomp-Mega"  → mega build (mega stats, mega stone)
+// This allows non-mega Garchomp to be freely selected alongside other megas.
+const MEGA_POOL_SUFFIX = "-Mega";
+
+/** Strip "-Mega" suffix to get base species name for Pokemon constructor. */
+function baseSpecies(poolName: string): string {
+  return poolName.endsWith(MEGA_POOL_SUFFIX)
+    ? poolName.slice(0, -MEGA_POOL_SUFFIX.length)
+    : poolName;
+}
+
+// Rough Skin / Iron Barbs: 1/8 max HP chip to attacker on contact
+const CHIP_DAMAGE_ABILITIES = new Set(["Rough Skin", "Iron Barbs"]);
+const CHIP_PCT = 12.5; // 1/8 of max HP
+
+// Sand Stream: sets permanent sandstorm
+const SAND_STREAM_ABILITY = "Sand Stream";
+const SAND_CHIP_PCT = 6.25; // 1/16 of max HP per turn
+const SAND_IMMUNE_TYPES = new Set(["Rock", "Ground", "Steel"]);
+const SAND_IMMUNE_ABILITIES = new Set(["Magic Guard", "Overcoat"]);
+
+function isSandImmune(types: string[], ability: string): boolean {
+  if (SAND_IMMUNE_ABILITIES.has(ability)) return true;
+  return types.some((t) => SAND_IMMUNE_TYPES.has(t));
+}
+
+// Stealth Rock: known competitive setters present in this pool
+// (Learnset data not in species.json, so hardcoded)
+const STEALTH_ROCK_USERS = new Set([
+  "Hippowdon", "Tyranitar", "Garchomp", "Excadrill", "Skarmory",
+  "Clefable", "Gliscor", "Toxapex", "Corviknight", "Forretress",
+  "Steelix", "Rhyperior", "Aggron", "Bastiodon", "Garganacl",
+  "Sandaconda", "Empoleon",
+]);
+
+/** SR chip as % of max HP. Rock effectiveness / 8 × 100. */
+function getSRChipPct(defenderTypes: string[]): number {
+  const eff = getEffectiveness("Rock" as TypeName, defenderTypes as TypeName[]);
+  return (eff / 8) * 100; // 12.5% neutral, 25% 2x weak, 50% 4x weak, 6.25% resist
+}
+
+/** Simulation environment: precomputed team-level lookups */
+interface SimEnv {
+  sandStreamUsers: Set<string>;    // Pool names with Sand Stream ability
+  sandImmune: Set<string>;         // Pool names immune to sand chip
+  srUsers: Set<string>;            // Pool names that can set Stealth Rock
+  srChipPct: Map<string, number>;  // Pool name → SR chip % they take (0-50)
+  poolTypes: Map<string, string[]>; // Pool name → types
+  poolAbilities: Map<string, string>; // Pool name → primary ability
+}
+
+/**
+ * Effective KO number that incorporates probability.
+ * Guaranteed OHKO (koN=1, chance=1.0) → 1.0
+ * 50% OHKO (koN=1, chance=0.5) → 1.5 (between OHKO and 2HKO)
+ * Guaranteed 2HKO → 2.0, etc.
+ */
+function effectiveKoN(entry: DamageMatrixEntry | undefined | null): number {
+  if (!entry || !entry.koN) return 99;
+  return entry.koN + (1 - (entry.koChance ?? 0));
+}
+
+/**
+ * Continuous kill pressure score from effective KO number.
+ * Guaranteed OHKO → 3.0, 50% OHKO → 2.5, guaranteed 2HKO → 2.0,
+ * guaranteed 3HKO → 1.0, 4HKO+ → 0.
+ */
+function calcKillPressure(eKoN: number): number {
+  return Math.max(0, Math.min(3, 4 - eKoN));
+}
+
 // ── Internal types ──────────────────────────────────────────────────────────
 
 type SPPattern = "physicalAT" | "specialAT" | "hbWall" | "hdWall";
@@ -99,6 +174,7 @@ interface MetaPokemon {
   usageRank: number;
   builds: BuildConfig[];
   moves: string[];
+  types: string[]; // from species.json
   /** Singles ranking scores (usage-weighted average across builds) */
   singlesScores?: {
     overallScore: number;
@@ -154,7 +230,7 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
     const atkBuild = attacker.builds.reduce((best, b) => b.weight > best.weight ? b : best);
 
     const atkPokemon = new Pokemon({
-      name: attacker.name,
+      name: baseSpecies(attacker.name),
       nature: atkBuild.nature as any,
       sp: atkBuild.sp,
       ability: atkBuild.ability,
@@ -166,7 +242,7 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
     for (const defender of pool) {
       const defBuild = defender.builds.reduce((best, b) => b.weight > best.weight ? b : best);
       const defPokemon = new Pokemon({
-        name: defender.name,
+        name: baseSpecies(defender.name),
         nature: defBuild.nature as any,
         sp: defBuild.sp,
         ability: defBuild.ability,
@@ -174,8 +250,19 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
         isMega: defBuild.isMega,
       });
 
-      const field = new Field({ gameType: "Singles" as any });
+      // Sand Stream: if either side has it, activate sandstorm
+      const sandActive = atkBuild.ability === SAND_STREAM_ABILITY || defBuild.ability === SAND_STREAM_ABILITY;
+      const field = sandActive
+        ? new Field({ gameType: "Singles" as any, weather: "Sand" as any })
+        : new Field({ gameType: "Singles" as any });
       let bestEntry: DamageMatrixEntry | null = null;
+
+      // Compute sand chip to defender (6.25% if sand active & defender not immune)
+      const defTypes = defender.types ?? [];
+      const defSandChip = sandActive && !isSandImmune(defTypes, defBuild.ability) ? SAND_CHIP_PCT : 0;
+
+      // Check if defender has a chip-on-contact ability (Rough Skin / Iron Barbs)
+      const defHasChip = CHIP_DAMAGE_ABILITIES.has(defBuild.ability);
 
       for (const moveName of attacker.moves) {
         try {
@@ -193,10 +280,13 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
           }
 
           // Palafin-Hero penalty: must switch out and back in → needs pivot partner
-          if (SWITCH_IN_PENALTY_POKEMON.has(attacker.name)) {
+          if (SWITCH_IN_PENALTY_POKEMON.has(baseSpecies(attacker.name))) {
             minPct *= SWITCH_IN_PENALTY;
             maxPct *= SWITCH_IN_PENALTY;
           }
+
+          const contact = move.makesContact();
+          const chipPct = (contact && defHasChip) ? CHIP_PCT : 0;
 
           if (!bestEntry || maxPct > bestEntry.maxPct) {
             bestEntry = {
@@ -206,6 +296,9 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
               koN: selfKO ? Math.max(ko.n, 2) : ko.n, // self-KO can't truly OHKO (you die too)
               koChance: round1(ko.chance),
               effectiveness: result.typeEffectiveness,
+              isContact: contact,
+              chipPctToAttacker: chipPct,
+              sandChipToDefender: defSandChip,
             };
           }
         } catch {
@@ -220,6 +313,9 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
         koN: 0,
         koChance: 0,
         effectiveness: 1,
+        isContact: false,
+        chipPctToAttacker: 0,
+        sandChipToDefender: defSandChip,
       };
     }
 
@@ -265,30 +361,29 @@ function validateTeamCompleteness(
 
     for (const opp of opponents) {
       // ATK NICHE: Is this member top-3 attacker vs this opponent?
+      // Use effectiveKoN for probability-aware comparison
       const myEntry = matrix[me]?.[opp];
-      const myKoN = myEntry?.koN || 99;
+      const myEKoN = effectiveKoN(myEntry);
       const myMaxPct = myEntry?.maxPct || 0;
 
       let betterCount = 0;
       for (const o of others) {
         const e = matrix[o]?.[opp];
-        const oKoN = e?.koN || 99;
+        const oEKoN = effectiveKoN(e);
         const oMaxPct = e?.maxPct || 0;
-        if (oKoN < myKoN || (oKoN === myKoN && oMaxPct > myMaxPct)) {
+        if (oEKoN < myEKoN || (oEKoN === myEKoN && oMaxPct > myMaxPct)) {
           betterCount++;
         }
       }
       if (betterCount < 3) atkNicheCount++;
 
       // DEF NICHE: Does this member provide unique switch-in value vs this opponent?
-      // Criteria: I survive the opponent's best (not OHKOd) while at least one
+      // Criteria: I survive the opponent's best (not near-guaranteed OHKO) while at least one
       // teammate gets OHKOd, AND I can hit back ≥30%.
-      const oppToMe = matrix[opp]?.[me];
-      const iGetOHKOd = oppToMe && oppToMe.koN === 1 && (oppToMe.koChance ?? 0) >= 0.5;
+      const iGetOHKOd = effectiveKoN(matrix[opp]?.[me]) <= 1.5;
       if (!iGetOHKOd && myMaxPct >= 30) {
         const anyTeammateOHKOd = others.some((o) => {
-          const e = matrix[opp]?.[o];
-          return e && e.koN === 1 && (e.koChance ?? 0) >= 0.5;
+          return effectiveKoN(matrix[opp]?.[o]) <= 1.5;
         });
         if (anyTeammateOHKOd) defNicheCount++;
       }
@@ -340,9 +435,9 @@ function generateTeams(
 
   for (let t = 0; t < count; t++) {
     const members: string[] = [];
-    let megaCount = 0;
     const used = new Set<number>();
     const usedItems = new Set<string>(); // Item exclusivity tracking
+    const usedSpecies = new Set<string>(); // Same-species exclusion (base + mega)
     let attempts = 0;
 
     while (members.length < TEAM_SIZE && attempts < MAX_TEAM_ATTEMPTS) {
@@ -354,9 +449,10 @@ function generateTeams(
       if (used.has(idx)) continue;
       const name = pool[idx].name;
       const item = primaryItem.get(name)!;
+      const species = baseSpecies(name);
 
-      // Limit mega-capable to 2 (but only 1 can be selected — enforced in selectTeam)
-      if (megaCapable.has(name) && megaCount >= 2) continue;
+      // Same-species exclusion: can't have both "Garchomp" and "Garchomp-Mega"
+      if (usedSpecies.has(species)) continue;
 
       // Item exclusivity: no two team members with the same item
       if (usedItems.has(item)) continue;
@@ -364,7 +460,7 @@ function generateTeams(
       used.add(idx);
       members.push(name);
       usedItems.add(item);
-      if (megaCapable.has(name)) megaCount++;
+      usedSpecies.add(species);
     }
 
     // If we couldn't fill 6, skip this team and try again
@@ -407,7 +503,8 @@ function selectTeam(
     for (const opp of oppTeam) {
       const entry = matrix[me]?.[opp];
       if (!entry) continue;
-      if (entry.koN >= 1 && entry.koN <= 2 && entry.koChance >= 0.5) kills++;
+      // Use effectiveKoN: ≤2.5 means at least a random 2HKO
+      if (effectiveKoN(entry) <= 2.5) kills++;
       totalDmg += entry.maxPct;
     }
     const consistency = kills / oppTeam.length;
@@ -445,11 +542,11 @@ function selectTeam(
     const coveredBySecondary = new Set<string>();
     for (const opp of oppTeam) {
       const aceEntry = matrix[ace.name]?.[opp];
-      if (aceEntry && aceEntry.koN >= 1 && aceEntry.koN <= 2 && aceEntry.koChance >= 0.5) {
+      if (effectiveKoN(aceEntry) <= 2.5) {
         coveredByAce.add(opp);
       }
       const candEntry = matrix[cand.name]?.[opp];
-      if (candEntry && candEntry.koN >= 1 && candEntry.koN <= 2 && candEntry.koChance >= 0.5) {
+      if (effectiveKoN(candEntry) <= 2.5) {
         coveredBySecondary.add(opp);
       }
     }
@@ -482,27 +579,25 @@ function selectTeam(
         // A. Does this opponent threaten our selected attackers?
         const isThreateningToUs = selected.some((atk) => {
           const entry = matrix[opp]?.[atk];
-          return entry && entry.koN === 1 && entry.koChance >= 0.5;
+          return effectiveKoN(entry) <= 1.5; // near-guaranteed OHKO
         });
 
         if (isThreateningToUs) {
           // Can this candidate survive and hit back?
           const oppToMe = matrix[opp]?.[me];
           const meToOpp = matrix[me]?.[opp];
-          const canTank = !oppToMe || oppToMe.koN !== 1 || oppToMe.koChance < 0.5;
+          const canTank = effectiveKoN(oppToMe) > 1.5; // survives at least a random OHKO
           const canHitBack = meToOpp && meToOpp.maxPct >= 30;
           if (canTank && canHitBack) defenseValue += 1;
         }
 
         // B. Uncovered by current selection?
         const uncovered = !selected.some((atk) => {
-          const entry = matrix[atk]?.[opp];
-          return entry && entry.koN >= 1 && entry.koN <= 2 && entry.koChance >= 0.5;
+          return effectiveKoN(matrix[atk]?.[opp]) <= 2.5;
         });
 
         if (uncovered) {
-          const meToOpp = matrix[me]?.[opp];
-          if (meToOpp && meToOpp.koN >= 1 && meToOpp.koN <= 2 && meToOpp.koChance >= 0.5) {
+          if (effectiveKoN(matrix[me]?.[opp]) <= 2.5) {
             offenseValue += 1;
           }
         }
@@ -543,37 +638,93 @@ function selectTeam(
 
 // ── 3v3 Evaluation ──────────────────────────────────────────────────────────
 
+/**
+ * Check if a team can set Stealth Rock: has an SR user that isn't guaranteed OHKOd.
+ */
+function canSetSR(team: string[], oppTeam: string[], matrix: DamageMatrix, env: SimEnv): boolean {
+  for (const sr of team) {
+    if (!env.srUsers.has(sr)) continue;
+    // SR user must survive at least a random OHKO from all opponents
+    let isOHKOd = false;
+    for (const opp of oppTeam) {
+      if (effectiveKoN(matrix[opp]?.[sr]) <= 1.0) { // guaranteed OHKO
+        isOHKOd = true;
+        break;
+      }
+    }
+    if (!isOHKOd) return true; // this SR user can set it up
+  }
+  return false;
+}
+
+/**
+ * Compute adjusted effectiveKoN accounting for virtual chip damage (sand + SR).
+ * Chip reduces defender's effective HP → fewer hits needed to KO.
+ */
+function adjustedEKoN(
+  entry: DamageMatrixEntry | undefined | null,
+  defenderChipPct: number,
+): number {
+  const base = effectiveKoN(entry);
+  if (!entry || entry.maxPct <= 0 || defenderChipPct <= 0) return base;
+  const effHP = Math.max(0, 100 - defenderChipPct);
+  if (effHP <= 0) return 0; // already KOd by chips alone
+  const adjusted = Math.ceil(effHP / entry.maxPct);
+  return Math.min(base, adjusted);
+}
+
 function evaluate3v3(
   selA: string[],
   selB: string[],
   matrix: DamageMatrix,
+  env: SimEnv,
 ): MatchEvaluation {
-  // A attacks B
+  // Team-level weather: sand if either team has a Sand Stream user in selection
+  const sandActive = selA.some((n) => env.sandStreamUsers.has(n))
+                  || selB.some((n) => env.sandStreamUsers.has(n));
+
+  // Team-level hazards: SR if team has an eligible setter
+  const srFromA = canSetSR(selA, selB, matrix, env); // A sets SR → B takes chip
+  const srFromB = canSetSR(selB, selA, matrix, env); // B sets SR → A takes chip
+
+  /** Virtual chip % a defender takes (sand + SR combined). */
+  function chipFor(name: string, oppHasSR: boolean): number {
+    let chip = 0;
+    if (sandActive && !env.sandImmune.has(name)) chip += SAND_CHIP_PCT;
+    if (oppHasSR) chip += env.srChipPct.get(name) ?? 0;
+    return chip;
+  }
+
+  // A attacks B — use continuous kill scoring via effectiveKoN (adjusted for chip)
   const B_killed = new Set<number>();
-  let A_ohkos = 0;
+  let A_killPressure = 0; // continuous kill pressure (replaces integer ohko count)
   let A_totalDmg = 0;
 
   for (const a of selA) {
     for (let j = 0; j < selB.length; j++) {
       const entry = matrix[a]?.[selB[j]];
       if (!entry) continue;
-      if (entry.koN >= 1 && entry.koN <= 2 && entry.koChance >= 0.5) B_killed.add(j);
-      if (entry.koN === 1 && entry.koChance >= 0.5) A_ohkos++;
+      const bChip = chipFor(selB[j], srFromA); // B takes chip from A's SR
+      const eKoN = adjustedEKoN(entry, bChip);
+      if (eKoN <= 2.5) B_killed.add(j);
+      A_killPressure += calcKillPressure(eKoN);
       A_totalDmg += entry.maxPct;
     }
   }
 
   // B attacks A
   const A_killed = new Set<number>();
-  let B_ohkos = 0;
+  let B_killPressure = 0;
   let B_totalDmg = 0;
 
   for (const b of selB) {
     for (let i = 0; i < selA.length; i++) {
       const entry = matrix[b]?.[selA[i]];
       if (!entry) continue;
-      if (entry.koN >= 1 && entry.koN <= 2 && entry.koChance >= 0.5) A_killed.add(i);
-      if (entry.koN === 1 && entry.koChance >= 0.5) B_ohkos++;
+      const aChip = chipFor(selA[i], srFromB); // A takes chip from B's SR
+      const eKoN = adjustedEKoN(entry, aChip);
+      if (eKoN <= 2.5) A_killed.add(i);
+      B_killPressure += calcKillPressure(eKoN);
       B_totalDmg += entry.maxPct;
     }
   }
@@ -582,14 +733,16 @@ function evaluate3v3(
   const B_kills = A_killed.size;
   const A_avgDmg = A_totalDmg / 9;
   const B_avgDmg = B_totalDmg / 9;
+  // Normalize kill pressure: max per matchup pair = 3.0, 9 pairs total → max = 27
+  const maxKP = 27;
 
   const scoreA = 0.35 * (A_kills / 3)
-               + 0.25 * (A_ohkos / 9)
+               + 0.25 * (A_killPressure / maxKP)
                + 0.20 * (1 - B_kills / 3)
                + 0.20 * (A_avgDmg / 100);
 
   const scoreB = 0.35 * (B_kills / 3)
-               + 0.25 * (B_ohkos / 9)
+               + 0.25 * (B_killPressure / maxKP)
                + 0.20 * (1 - A_kills / 3)
                + 0.20 * (B_avgDmg / 100);
 
@@ -630,7 +783,7 @@ function getTeamDefensiveWeaks(members: string[]): string[] {
 
   for (const name of members) {
     try {
-      const species = getSpecies(name);
+      const species = getSpecies(baseSpecies(name));
       if (!species) continue;
       const defTypes = species.types as string[];
       for (const atkType of ALL_TYPES) {
@@ -704,21 +857,21 @@ function computePokemonStats(
 // ── Threat Analysis ─────────────────────────────────────────────────────
 
 /**
- * Classify threat level of a single opponent against a team.
- * Uses the same logic as moveCalc.ts classifyThreat:
- *   CRITICAL: ourBestKoN >= 3 AND theirBestKoN <= 2
- *   HIGH:     ourBestKoN >= 3 OR (theirBestKoN <= 2 AND slower)
- *   MEDIUM:   ourBestKoN === 2
- *   LOW:      ourBestKoN === 1
+ * Classify threat level using effective KO numbers (continuous, not integer).
+ * effectiveKoN incorporates probability: e.g. 50% OHKO → 1.5, guaranteed 2HKO → 2.0
+ *   CRITICAL: ourBest >= 3.0 AND theirBest <= 2.0
+ *   HIGH:     ourBest >= 3.0 OR (theirBest <= 2.0 AND slower)
+ *   MEDIUM:   ourBest <= 2.5 (at least a random 2HKO)
+ *   LOW:      ourBest <= 1.5 (at least a random OHKO)
  */
 function classifyThreatLevel(
-  ourBestKoN: number,
-  theirBestKoN: number,
+  ourBestEKoN: number,
+  theirBestEKoN: number,
   speed: "faster" | "slower" | "tie",
 ): ThreatLevel {
-  if (ourBestKoN >= 3 && theirBestKoN <= 2) return "critical";
-  if (ourBestKoN >= 3 || (theirBestKoN <= 2 && speed === "slower")) return "high";
-  if (ourBestKoN === 2) return "medium";
+  if (ourBestEKoN >= 3 && theirBestEKoN <= 2) return "critical";
+  if (ourBestEKoN >= 3 || (theirBestEKoN <= 2 && speed === "slower")) return "high";
+  if (ourBestEKoN <= 2.5) return "medium";
   return "low";
 }
 
@@ -733,14 +886,15 @@ function computeTeamThreatProfile(
   members: string[],
   pool: MetaPokemon[],
   matrix: DamageMatrix,
+  env: SimEnv,
 ): ThreatProfile {
   const teamSet = new Set(members);
   const opponents = pool.filter((p) => !teamSet.has(p.name));
 
   // ── Mega constraint awareness ──
-  // Identify mega-capable members in this team.
-  // Teams can have ≤2 mega-capable Pokemon, but only 1 can be selected per 3v3.
-  // The damage matrix uses mega stats, so non-active megas are overestimated.
+  // Identify mega pool entries ("-Mega" suffix) in this team.
+  // Only 1 can mega-evolve per 3v3 selection.
+  // Non-mega pool entries (even for mega-capable species) are NOT flagged.
   const megaMembers = new Set<string>();
   for (const m of members) {
     const meta = pool.find((p) => p.name === m);
@@ -753,6 +907,27 @@ function computeTeamThreatProfile(
   for (const m of members) {
     const meta = pool.find((p) => p.name === m);
     memberSpeeds.set(m, meta?.singlesScores?.speedStat ?? 0);
+  }
+
+  // ── Sand / SR team-level effects ──
+  const teamHasSand = members.some((m) => env.sandStreamUsers.has(m));
+  const teamHasSR = members.some((m) => env.srUsers.has(m));
+
+  /** Virtual chip % an opponent takes from our team's sand/SR. */
+  function oppChipFor(oppName: string): number {
+    let chip = 0;
+    if (teamHasSand && !env.sandImmune.has(oppName)) chip += SAND_CHIP_PCT;
+    if (teamHasSR) chip += env.srChipPct.get(oppName) ?? 0;
+    return chip;
+  }
+
+  /** Virtual chip % a team member takes from an opponent's sand/SR.
+   *  (Opponent could also have Sand Stream.) */
+  function myChipFrom(meName: string, oppHasSand: boolean): number {
+    let chip = 0;
+    if (oppHasSand && !env.sandImmune.has(meName)) chip += SAND_CHIP_PCT;
+    // Opponent SR not modeled here (would need per-opponent SR check)
+    return chip;
   }
 
   // Sort opponents by usage descending to identify top-10 usage mons
@@ -776,26 +951,48 @@ function computeTeamThreatProfile(
   // megaExclusiveKills[megaName] = kill pressure points that ONLY this mega provides
   const megaExclusiveKills = new Map<string, number>();
 
-  /** Check if a member meets answer criteria vs an opponent */
+  /** Check if a member meets answer criteria vs an opponent.
+   *  Uses effectiveKoN for probability-aware evaluation, adjusts for:
+   *  - Contact chip damage (Rough Skin etc.)
+   *  - Sand chip & SR virtual damage (team-level effects) */
   function meetsAnswerCriteria(me: string, oppName: string, oppSpeed: number): boolean {
     const meToOpp = matrix[me]?.[oppName];
     const oppToMe = matrix[oppName]?.[me];
     if (!meToOpp) return false;
-    const myKoN = meToOpp.koN || 99;
-    if (myKoN > 2) return false; // can't KO in ≤2
+
+    // My KO against opponent: adjust for sand + SR chip opponent takes
+    const oppChip = oppChipFor(oppName);
+    const myEKoN = adjustedEKoN(meToOpp, oppChip);
+    if (myEKoN > 2.5) return false; // can't reliably KO in ≤2
 
     const memberSpeed = memberSpeeds.get(me) ?? 0;
     const outspeeds = memberSpeed > oppSpeed;
 
-    // Outspeeds and OHKOs (revenge kill)
-    if (outspeeds && myKoN === 1) return true;
+    // Outspeeds and guaranteed/near-guaranteed OHKO (revenge kill)
+    if (outspeeds && myEKoN <= 1.25) return true;
+
+    // Their KO against me: adjust for opponent's sand chip to me
+    const oppAbility = env.poolAbilities.get(oppName) ?? "";
+    const oppHasSand = oppAbility === SAND_STREAM_ABILITY;
+    const meChip = myChipFrom(me, oppHasSand);
+    let theirEKoNToMe = adjustedEKoN(oppToMe, meChip);
+
+    // Also adjust for contact chip I take from Rough Skin etc.
+    if (meToOpp.chipPctToAttacker > 0 && oppToMe) {
+      const hitsNeeded = Math.ceil(myEKoN);
+      const totalContactChip = hitsNeeded * meToOpp.chipPctToAttacker;
+      const myEffectiveHP = 100 - totalContactChip - meChip;
+      if (myEffectiveHP > 0 && oppToMe.maxPct > 0) {
+        const adjustedKoN = Math.ceil(myEffectiveHP / oppToMe.maxPct);
+        theirEKoNToMe = Math.min(theirEKoNToMe, adjustedKoN);
+      }
+    }
 
     // Survives opponent's best and wins KO race
-    const theirKoNToMe = oppToMe?.koN || 99;
-    if (theirKoNToMe >= 2) {
+    if (theirEKoNToMe >= 2) {
       const weWin = outspeeds
-        ? myKoN <= theirKoNToMe
-        : myKoN < theirKoNToMe;
+        ? myEKoN <= theirEKoNToMe
+        : myEKoN < theirEKoNToMe;
       if (weWin) return true;
     }
     return false;
@@ -803,34 +1000,40 @@ function computeTeamThreatProfile(
 
   for (const opp of opponents) {
     const oppSpeed = opp.singlesScores?.speedStat ?? 0;
+    const oppAbility = env.poolAbilities.get(opp.name) ?? "";
+    const oppHasSand = oppAbility === SAND_STREAM_ABILITY;
 
-    // ── Our best damage (mega-aware) ──
-    // Track both overall best and best non-mega alternative
-    let ourBestKoN = 99;
+    // Sand/SR chip opponent takes from our team
+    const oppVirtualChip = oppChipFor(opp.name);
+
+    // ── Our best damage (mega-aware, adjusted for sand/SR) ──
+    let ourBestEKoN = 99;
     let ourBestMember = "";
-    let nonMegaBestKoN = 99;
+    let nonMegaBestEKoN = 99;
     for (const me of members) {
       const entry = matrix[me]?.[opp.name];
       if (!entry) continue;
-      const koN = entry.koN || 99;
-      if (koN < ourBestKoN) {
-        ourBestKoN = koN;
+      const eKoN = adjustedEKoN(entry, oppVirtualChip);
+      if (eKoN < ourBestEKoN) {
+        ourBestEKoN = eKoN;
         ourBestMember = me;
       }
-      if (!megaMembers.has(me) && koN < nonMegaBestKoN) {
-        nonMegaBestKoN = koN;
+      if (!megaMembers.has(me) && eKoN < nonMegaBestEKoN) {
+        nonMegaBestEKoN = eKoN;
       }
     }
 
     // Their best: which team member takes the most damage?
-    let theirBestKoN = 99;
+    // Adjust for sand chip our member takes if opponent has Sand Stream
+    let theirBestEKoN = 99;
     let theirBestTarget = "";
     for (const me of members) {
       const entry = matrix[opp.name]?.[me];
       if (!entry) continue;
-      const koN = entry.koN || 99;
-      if (koN < theirBestKoN) {
-        theirBestKoN = koN;
+      const meChip = myChipFrom(me, oppHasSand);
+      const eKoN = adjustedEKoN(entry, meChip);
+      if (eKoN < theirBestEKoN) {
+        theirBestEKoN = eKoN;
         theirBestTarget = me;
       }
     }
@@ -841,24 +1044,17 @@ function computeTeamThreatProfile(
       ourFastestRelevant > oppSpeed ? "faster" :
       ourFastestRelevant < oppSpeed ? "slower" : "tie";
 
-    const threatLevel = classifyThreatLevel(ourBestKoN, theirBestKoN, speed);
+    const threatLevel = classifyThreatLevel(ourBestEKoN, theirBestEKoN, speed);
 
-    // ── Kill pressure (mega-aware) ──
-    // Score based on ourBest, but track if this kill is mega-exclusive
-    let killPoints = 0;
-    if (ourBestKoN === 1) killPoints = 3;
-    else if (ourBestKoN === 2) killPoints = 2;
-    else if (ourBestKoN === 3) killPoints = 1;
-    killPressureSum += killPoints;
+    // ── Kill pressure (mega-aware, continuous scoring) ──
+    // Guaranteed OHKO → 3.0, 50% OHKO → 2.5, guaranteed 2HKO → 2.0, etc.
+    const kp = calcKillPressure(ourBestEKoN);
+    killPressureSum += kp;
 
     // If the best killer is mega and no non-mega alternative within same tier
-    if (hasMegaConstraint && megaMembers.has(ourBestMember) && killPoints > 0) {
-      let nonMegaKillPoints = 0;
-      if (nonMegaBestKoN === 1) nonMegaKillPoints = 3;
-      else if (nonMegaBestKoN === 2) nonMegaKillPoints = 2;
-      else if (nonMegaBestKoN === 3) nonMegaKillPoints = 1;
-
-      const lostPoints = killPoints - nonMegaKillPoints;
+    if (hasMegaConstraint && megaMembers.has(ourBestMember) && kp > 0) {
+      const nonMegaKp = calcKillPressure(nonMegaBestEKoN);
+      const lostPoints = kp - nonMegaKp;
       if (lostPoints > 0) {
         megaExclusiveKills.set(
           ourBestMember,
@@ -924,9 +1120,9 @@ function computeTeamThreatProfile(
       opponent: opp.name,
       usagePct: oppUsage,
       threatLevel,
-      ourBestKoN: ourBestKoN === 99 ? 0 : ourBestKoN,
+      ourBestKoN: ourBestEKoN >= 99 ? 0 : Math.round(ourBestEKoN * 10) / 10,
       ourBestMember,
-      theirBestKoN: theirBestKoN === 99 ? 0 : theirBestKoN,
+      theirBestKoN: theirBestEKoN >= 99 ? 0 : Math.round(theirBestEKoN * 10) / 10,
       theirBestTarget,
       hasAnswer,
     });
@@ -1038,6 +1234,8 @@ function main() {
     const moves: string[] = rp.builds[0]?.moves ?? [];
     if (builds.length === 0 || moves.length === 0) continue;
     if (moves.length < MIN_MOVE_COUNT) continue; // Pool quality gate
+    // Skip Pokemon not in species.json (can't build damage calc)
+    if (!getSpecies(rp.name)) continue;
 
     allMeta.push({
       name: rp.name,
@@ -1045,6 +1243,7 @@ function main() {
       usageRank: rp.usageRank,
       builds,
       moves,
+      types: getSpecies(rp.name)?.types ?? [],
       singlesScores: {
         overallScore: rp.scores.overallScore,
         offensiveScore: rp.scores.offensiveScore,
@@ -1063,22 +1262,120 @@ function main() {
   const poolFiltered = originalPoolSize - allMeta.length;
   console.log(`[1/6] Pool: ${allMeta.length} Pokemon (${poolFiltered} filtered: <${MIN_MOVE_COUNT} moves)`);
 
+  // ─── Phase 1b: Split mega-capable Pokemon into base + mega entries ────
+  // This allows non-mega builds (e.g., Choice Scarf Garchomp) to be freely
+  // selected alongside other megas, while mega builds stay constrained.
+  const expandedPool: MetaPokemon[] = [];
+  let synthesizedCount = 0;
+
+  for (const mp of allMeta) {
+    const megaBuilds = mp.builds.filter((b) => b.isMega);
+    const nonMegaBuilds = mp.builds.filter((b) => !b.isMega);
+
+    if (megaBuilds.length > 0) {
+      // Mega entry: "Name-Mega"
+      expandedPool.push({
+        ...mp,
+        name: mp.name + MEGA_POOL_SUFFIX,
+        builds: megaBuilds,
+      });
+
+      // Non-mega entry: "Name" (existing builds or synthesized)
+      if (nonMegaBuilds.length > 0) {
+        expandedPool.push({ ...mp, builds: nonMegaBuilds });
+      } else {
+        // Synthesize non-mega build from best mega build
+        const bestMega = megaBuilds.reduce((a, b) => (a.weight > b.weight ? a : b));
+        const species = getSpecies(mp.name);
+        // Item: physical attackers get Choice Band/Scarf, special get Choice Specs
+        // Walls get Leftovers, default to Focus Sash
+        const isPhysAT = bestMega.spPattern === "physicalAT";
+        const isSpecAT = bestMega.spPattern === "specialAT";
+        const item = isPhysAT ? "Choice Band" : isSpecAT ? "Choice Specs" : "Leftovers";
+        // Prefer LAST ability in list (typically competitively strongest: hidden/HA)
+        // e.g., Garchomp: ["Sand Veil", "Rough Skin"] → Rough Skin
+        //       Dragonite: ["Inner Focus", "Multiscale"] → Multiscale
+        const abilities = species?.abilities ?? [];
+        const baseAbility = abilities[abilities.length - 1] ?? bestMega.ability;
+        expandedPool.push({
+          ...mp,
+          builds: [
+            {
+              ...bestMega,
+              isMega: false,
+              item,
+              ability: baseAbility,
+              weight: bestMega.weight * 0.7,
+            },
+          ],
+        });
+        synthesizedCount++;
+      }
+    } else {
+      // Non-mega Pokemon: keep as-is
+      expandedPool.push(mp);
+    }
+  }
+
+  const megaEntries = expandedPool.filter((p) => p.name.endsWith(MEGA_POOL_SUFFIX)).length;
+  console.log(
+    `  Mega split: ${megaEntries} mega entries, ${synthesizedCount} synthesized non-mega builds`,
+  );
+  console.log(`  Expanded pool: ${expandedPool.length} entries (from ${allMeta.length} species)`);
+
   // ─── Phase 2: Damage matrix ──────────────────────────────────────────
 
   console.log(`[2/6] Computing damage matrix...`);
-  const { matrix, totalCalcs } = buildDamageMatrix(allMeta);
-  console.log(`  ${totalCalcs} calculations (${allMeta.length}×${allMeta.length} pairs)`);
+  const { matrix, totalCalcs } = buildDamageMatrix(expandedPool);
+  console.log(`  ${totalCalcs} calculations (${expandedPool.length}×${expandedPool.length} pairs)`);
 
-  // Identify mega-capable Pokemon
+  // Identify mega-capable pool entries (only "-Mega" suffixed entries)
   const megaCapable = new Set(
-    allMeta.filter((p) => p.builds.some((b) => b.isMega)).map((p) => p.name),
+    expandedPool.filter((p) => p.name.endsWith(MEGA_POOL_SUFFIX)).map((p) => p.name),
   );
-  console.log(`  Mega-capable: ${[...megaCapable].join(", ")}`);
+  console.log(`  Mega entries: ${[...megaCapable].join(", ")}`);
+
+  // ─── Phase 2b: Build simulation environment (sand/SR lookups) ────────
+
+  const simEnv: SimEnv = {
+    sandStreamUsers: new Set<string>(),
+    sandImmune: new Set<string>(),
+    srUsers: new Set<string>(),
+    srChipPct: new Map<string, number>(),
+    poolTypes: new Map<string, string[]>(),
+    poolAbilities: new Map<string, string>(),
+  };
+
+  for (const p of expandedPool) {
+    const primaryBuild = p.builds.reduce((best, b) => (b.weight > best.weight ? b : best));
+    const speciesName = baseSpecies(p.name);
+    const species = getSpecies(speciesName);
+    const types = species?.types ?? [];
+
+    simEnv.poolTypes.set(p.name, types);
+    simEnv.poolAbilities.set(p.name, primaryBuild.ability);
+
+    if (primaryBuild.ability === SAND_STREAM_ABILITY) {
+      simEnv.sandStreamUsers.add(p.name);
+    }
+    if (isSandImmune(types, primaryBuild.ability)) {
+      simEnv.sandImmune.add(p.name);
+    }
+    // SR user: base species must be in known list (mega entries also count via base name)
+    if (STEALTH_ROCK_USERS.has(speciesName)) {
+      simEnv.srUsers.add(p.name);
+    }
+    // SR chip this Pokemon would take (precomputed)
+    simEnv.srChipPct.set(p.name, getSRChipPct(types));
+  }
+
+  console.log(`  Sand Stream users: ${[...simEnv.sandStreamUsers].join(", ") || "none"}`);
+  console.log(`  SR setters: ${[...simEnv.srUsers].join(", ") || "none"}`);
 
   // ─── Phase 3: Generate teams (with item exclusivity) ──────────────────
 
   console.log(`[3/6] Generating ${totalTeams} teams (item exclusivity + completeness validation)...`);
-  const { teams, validationRejects } = generateTeams(allMeta, totalTeams, rng, matrix);
+  const { teams, validationRejects } = generateTeams(expandedPool, totalTeams, rng, matrix);
   console.log(`  Generated ${teams.length} teams (${validationRejects} rejected for dead-weight members)`);
 
   // ─── Phase 4: Round-robin evaluation (max 1 mega per selection) ───────
@@ -1093,7 +1390,7 @@ function main() {
   const teamSelections: Map<number, Map<string, { count: number; wins: number }>> = new Map();
   // Per-Pokemon selection log (for top teams only — collected later)
   const selectionLog = new Map<string, { teamId: string; selected: string[]; won: boolean }[]>();
-  for (const meta of allMeta) selectionLog.set(meta.name, []);
+  for (const meta of expandedPool) selectionLog.set(meta.name, []);
 
   // For each team, pick random opponents
   let totalMatchups = 0;
@@ -1113,7 +1410,7 @@ function main() {
       const selB = selectTeam(oppTeam.members, myTeam.members, matrix, megaCapable);
 
       // Evaluate
-      const result = evaluate3v3(selA.members, selB.members, matrix);
+      const result = evaluate3v3(selA.members, selB.members, matrix, simEnv);
       totalMatchups++;
 
       if (result.winner === "A") {
@@ -1172,7 +1469,7 @@ function main() {
       }));
 
     // Compute threat profile for this team vs entire pool
-    const threatProfile = computeTeamThreatProfile(team.members, allMeta, matrix);
+    const threatProfile = computeTeamThreatProfile(team.members, expandedPool, matrix, simEnv);
 
     return {
       rank: 0,
@@ -1185,7 +1482,7 @@ function main() {
       avgScore: totalGames > 0 ? round1((teamScoreSum[ti] / totalGames) * 100) / 100 : 0,
       commonSelections: patterns,
       typeProfile: {
-        offensiveTypes: getTeamOffensiveTypes(team.members, allMeta),
+        offensiveTypes: getTeamOffensiveTypes(team.members, expandedPool),
         defensiveWeaks: getTeamDefensiveWeaks(team.members),
       },
       threatProfile,
@@ -1226,11 +1523,13 @@ function main() {
   const pokemonStats = computePokemonStats(topTeams, teams, selectionLog);
 
   // Build pool info (enriched with singles ranking scores)
-  const poolMembers: PoolMember[] = allMeta.map((meta) => {
+  // Use expanded pool entries — strip "-Mega" suffix for display names
+  const poolMembers: PoolMember[] = expandedPool.map((meta) => {
     const primaryBuild = meta.builds.reduce((best, b) => b.weight > best.weight ? b : best);
-    const species = getSpecies(meta.name);
+    const speciesName = baseSpecies(meta.name);
+    const species = getSpecies(speciesName);
     return {
-      name: meta.name,
+      name: meta.name, // keep pool name (e.g., "Garchomp-Mega") for matrix lookup
       usagePct: meta.usagePct,
       usageRank: meta.usageRank,
       isMega: primaryBuild.isMega,
@@ -1259,7 +1558,7 @@ function main() {
     config: {
       totalTeams,
       gamesPerTeam,
-      poolSize: allMeta.length,
+      poolSize: expandedPool.length,
       poolFiltered,
       teamsRejected: validationRejects,
     },
@@ -1274,7 +1573,7 @@ function main() {
 
   const sizeKB = Math.round(readFileSync(outPath).length / 1024);
   console.log(`Written to ${outPath} (${sizeKB}KB)`);
-  console.log(`  Pool: ${allMeta.length}, Matrix calcs: ${totalCalcs}, Matchups: ${totalMatchups}`);
+  console.log(`  Pool: ${expandedPool.length} entries (${allMeta.length} species), Matrix calcs: ${totalCalcs}, Matchups: ${totalMatchups}`);
   console.log(`  Top team WR: ${(topTeams[0]?.winRate * 100).toFixed(1)}%`);
   if (topTeams[0]?.threatProfile) {
     const tp = topTeams[0].threatProfile;

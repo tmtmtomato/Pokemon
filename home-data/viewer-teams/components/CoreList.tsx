@@ -6,6 +6,7 @@
 import type { CoreEntry } from "../../types/team-analysis";
 import { useLang } from "../../viewer/LanguageContext";
 import { localizePokemon } from "../../viewer/i18n";
+import { PokemonIcon } from "../../viewer/PokemonIcon";
 import { confidenceLabel, fmtPct } from "../utils";
 
 interface CoreListProps {
@@ -63,9 +64,11 @@ export function CoreList({ cores, selected, onSelect }: CoreListProps) {
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[11px] text-gray-200">
+              <div className="flex flex-wrap gap-x-1 gap-y-0.5 text-[11px] text-gray-200 items-center">
                 {core.species.map((sp) => (
-                  <span key={sp}>{localizePokemon(sp, lang)}</span>
+                  <span key={sp} className="inline-flex items-center">
+                    <PokemonIcon name={sp} size="w-5 h-5" />
+                  </span>
                 ))}
               </div>
             </button>

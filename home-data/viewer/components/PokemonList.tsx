@@ -7,6 +7,7 @@
 import type { PokemonMeta } from "../../types/analytics";
 import { useLang } from "../LanguageContext";
 import { localizePokemon } from "../i18n";
+import { PokemonIcon } from "../PokemonIcon";
 import {
   extractVgcpastGames,
   formatPct,
@@ -62,6 +63,7 @@ export function PokemonList({ pokemon, selected, onSelect }: PokemonListProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="truncate text-sm font-medium text-gray-100">
+                  <PokemonIcon name={mon.name} size="w-6 h-6" />{" "}
                   {primaryName}
                 </div>
                 {subName && (

@@ -1,6 +1,7 @@
 import React from "react";
 import type { PoolMember } from "../../types/team-matchup";
 import { localizePokemon, type Lang } from "../../viewer/i18n";
+import { PokemonIcon } from "../../viewer/PokemonIcon";
 
 interface Props {
   pool: PoolMember[];
@@ -35,7 +36,7 @@ export default function PokemonSidebar({ pool, selected, onSelect, query, lang }
             <span className="text-gray-500 w-6 text-right tabular-nums shrink-0">{i + 1}</span>
             <div className="flex-1 min-w-0">
               <div className="text-gray-200 truncate">
-                {localizePokemon(p.name, lang)}
+                <PokemonIcon name={p.name} size="w-5 h-5" /> {localizePokemon(p.name, lang)}
               </div>
               {lang === "ja" && (
                 <div className="text-[10px] text-gray-500 truncate">{p.name}</div>

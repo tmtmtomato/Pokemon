@@ -5,6 +5,7 @@
 import type { RankedPokemon } from "../../types/singles-ranking";
 import type { SortKey } from "../App";
 import { localizePokemon } from "../../viewer/i18n";
+import { PokemonIcon } from "../../viewer/PokemonIcon";
 
 interface PokemonRankListProps {
   pokemon: RankedPokemon[];
@@ -73,10 +74,11 @@ export function PokemonRankList({ pokemon, selected, onSelect, lang, sortKey }: 
                 : "border-transparent hover:bg-gray-800/40"
             }`}
           >
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-center gap-2">
               <span className="text-[10px] text-gray-500 tabular-nums w-5 shrink-0 text-right">
                 {i + 1}
               </span>
+              <PokemonIcon name={p.name} size="w-6 h-6" />
               <span className="text-sm text-gray-100 truncate font-medium">{displayName}</span>
               <span className="text-[10px] text-gray-500 truncate">{subName}</span>
             </div>

@@ -4,6 +4,7 @@ import type { TeamMatchupResult, RankedTeam } from "../types/team-matchup";
 import { useLang } from "../viewer/LanguageContext";
 import { localizePokemon } from "../viewer/i18n";
 import { MatchupToolbar } from "./components/MatchupToolbar";
+import { SimInfoPanel } from "./components/SimInfoPanel";
 import { TeamRankList } from "./components/TeamRankList";
 import { TeamDetail } from "./components/TeamDetail";
 
@@ -17,6 +18,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string>(data.topTeams[0]?.teamId ?? "");
   const [sortKey, setSortKey] = useState<SortKey>("combined");
   const [query, setQuery] = useState("");
+  const [showSimInfo, setShowSimInfo] = useState(false);
 
   const toggleDark = () => {
     setDark((d) => {
@@ -74,7 +76,10 @@ export default function App() {
         onToggleDark={toggleDark}
         config={data.config}
         pokemonStats={data.pokemonStats}
+        showSimInfo={showSimInfo}
+        onToggleSimInfo={() => setShowSimInfo((v) => !v)}
       />
+      {showSimInfo && <SimInfoPanel lang={lang} onClose={() => setShowSimInfo(false)} />}
       <div className="flex flex-1 overflow-hidden">
         <TeamRankList
           teams={sorted}

@@ -66,6 +66,26 @@ export function calculateDamage(
     return { rolls: new Array(16).fill(0), moveType, typeEffectiveness: 0, isCrit };
   }
 
+  // 特性による タイプ免疫 (かたやぶりで貫通)
+  if (!attacker.hasMoldBreaker()) {
+    const defAbility = defender.effectiveAbility();
+    if (
+      (defAbility === 'Levitate' && moveType === 'Ground') ||
+      (defAbility === 'Flash Fire' && moveType === 'Fire') ||
+      (defAbility === 'Water Absorb' && moveType === 'Water') ||
+      (defAbility === 'Volt Absorb' && moveType === 'Electric') ||
+      (defAbility === 'Motor Drive' && moveType === 'Electric') ||
+      (defAbility === 'Lightning Rod' && moveType === 'Electric') ||
+      (defAbility === 'Storm Drain' && moveType === 'Water') ||
+      (defAbility === 'Sap Sipper' && moveType === 'Grass') ||
+      (defAbility === 'Earth Eater' && moveType === 'Ground') ||
+      (defAbility === 'Well-Baked Body' && moveType === 'Fire') ||
+      (defAbility === 'Dry Skin' && moveType === 'Water')
+    ) {
+      return { rolls: new Array(16).fill(0), moveType, typeEffectiveness: 0, isCrit };
+    }
+  }
+
   // 3. Effective base power
   let basePower = getEffectiveBasePower(move, attacker, defender);
 
@@ -79,6 +99,12 @@ export function calculateDamage(
   if (!attacker.hasMoldBreaker() && defender.effectiveAbility() === 'Thick Fat' &&
       (moveType === 'Fire' || moveType === 'Ice')) {
     basePower = applyMod(basePower, MOD.x0_5);
+  }
+
+  // かんそうはだ (Dry Skin): 炎技のダメージ1.25倍（かたやぶりで貫通）
+  // Water immunity is handled above in type immunity section
+  if (!attacker.hasMoldBreaker() && defender.effectiveAbility() === 'Dry Skin' && moveType === 'Fire') {
+    basePower = applyMod(basePower, MOD.x1_25);
   }
 
   // Terrain boost (1.3x for matching type, grounded pokemon)

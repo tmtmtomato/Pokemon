@@ -10,6 +10,9 @@ export interface DamageMatrixEntry {
   koN: number; // 1=OHKO, 2=2HKO, ...; 0=no KO in 4 hits
   koChance: number; // 0.0-1.0
   effectiveness: number;
+  isContact: boolean; // true if bestMove makes contact
+  chipPctToAttacker: number; // % of attacker HP lost per hit (Rough Skin/Iron Barbs: 12.5)
+  sandChipToDefender: number; // 6.25 if Sand active & defender not Rock/Ground/Steel/immune, else 0
 }
 
 /** Full 49×49 damage matrix: matrix[attackerName][defenderName] */

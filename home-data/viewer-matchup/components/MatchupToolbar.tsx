@@ -17,6 +17,8 @@ interface MatchupToolbarProps {
   onToggleDark: () => void;
   config: { totalTeams: number; gamesPerTeam: number; poolSize: number };
   pokemonStats: PokemonTeamStats[];
+  showSimInfo: boolean;
+  onToggleSimInfo: () => void;
 }
 
 const SORT_OPTIONS: { key: SortKey; labelJa: string; labelEn: string }[] = [
@@ -36,6 +38,8 @@ export function MatchupToolbar({
   dark,
   onToggleDark,
   config,
+  showSimInfo,
+  onToggleSimInfo,
 }: MatchupToolbarProps) {
   return (
     <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-gray-700 bg-gray-900/95 px-4 py-2 backdrop-blur">
@@ -72,6 +76,19 @@ export function MatchupToolbar({
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Sim info toggle */}
+      <button
+        onClick={onToggleSimInfo}
+        className={`rounded px-2 py-0.5 text-xs transition ${
+          showSimInfo
+            ? "bg-blue-600 text-white"
+            : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200"
+        }`}
+        title={lang === "ja" ? "シミュレーション仕様" : "Simulation specs"}
+      >
+        {lang === "ja" ? "仕様" : "Specs"}
+      </button>
 
       {/* Stats */}
       <span className="text-[10px] text-gray-500 tabular-nums">

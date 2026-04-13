@@ -4,6 +4,7 @@
 
 import type { RankedTeam } from "../../types/team-matchup";
 import { localizePokemon } from "../../viewer/i18n";
+import { PokemonIcon } from "../../viewer/PokemonIcon";
 
 interface TeamRankListProps {
   teams: RankedTeam[];
@@ -77,16 +78,11 @@ export function TeamRankList({ teams, selected, onSelect, lang }: TeamRankListPr
               </span>
             </div>
 
-            {/* Line 2-3: 6 Pokemon names in 2 rows of 3 */}
-            <div className="mt-0.5 grid grid-cols-3 gap-x-1">
-              {row1.map((name) => (
-                <span key={name} className="text-[10px] text-gray-400 truncate">
-                  {abbreviate(name, lang)}
-                </span>
-              ))}
-              {row2.map((name) => (
-                <span key={name} className="text-[10px] text-gray-400 truncate">
-                  {abbreviate(name, lang)}
+            {/* Line 2-3: 6 Pokemon icons in 2 rows of 3 */}
+            <div className="mt-0.5 grid grid-cols-6 gap-x-0.5">
+              {members.map((name) => (
+                <span key={name} className="flex justify-center" title={localizePokemon(name, lang)}>
+                  <PokemonIcon name={name} size="w-5 h-5" />
                 </span>
               ))}
             </div>

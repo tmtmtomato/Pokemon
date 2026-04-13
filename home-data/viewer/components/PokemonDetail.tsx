@@ -15,6 +15,7 @@ import {
   natureLabel,
 } from "../i18n";
 import type { Lang } from "../i18n";
+import { PokemonIcon } from "../PokemonIcon";
 import { formatPct } from "../utils";
 import { UsageBar } from "./UsageBar";
 
@@ -194,7 +195,9 @@ export function PokemonDetail({ mon, formatDisplay, displayRank }: PokemonDetail
             <div className="text-xs uppercase tracking-wider text-gray-500">
               {formatDisplay}
             </div>
-            <h2 className="text-2xl font-bold text-gray-50">{primaryName}</h2>
+            <h2 className="text-2xl font-bold text-gray-50">
+              <PokemonIcon name={mon.name} size="w-8 h-8" /> {primaryName}
+            </h2>
             {subName && (
               <div className="text-xs text-gray-500">{subName}</div>
             )}

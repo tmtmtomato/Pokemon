@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react";
 import type { RankedPokemon, PokemonBuild, MoveStats } from "../../types/singles-ranking";
 import { localizePokemon, localizeMove, localizeItem, localizeNature, localizeAbility, localizeType } from "../../viewer/i18n";
+import { PokemonIcon } from "../../viewer/PokemonIcon";
 import { ScoreBar } from "./ScoreBar";
 import { MatchupGrid } from "./MatchupGrid";
 
@@ -245,7 +246,8 @@ export function PokemonPowerDetail({ pokemon, lang }: PokemonPowerDetailProps) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-baseline gap-3">
+      <div className="flex items-center gap-3">
+        <PokemonIcon name={p.name} size="w-8 h-8" />
         <span className="text-2xl font-bold text-gray-100">{displayName}</span>
         <span className="text-sm text-gray-500">{subName}</span>
         <span className="text-xs text-gray-500 ml-auto tabular-nums">
