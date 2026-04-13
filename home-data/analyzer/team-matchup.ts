@@ -38,6 +38,9 @@ import type {
   ThreatProfile,
   ThreatEntry,
   ThreatLevel,
+  CoreRanking,
+  PokemonCoreStats,
+  MetaRepresentative,
 } from "../types/team-matchup.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -72,6 +75,11 @@ const MAX_VALIDATION_RETRIES = 50_000;
 // Dead member = selected in <5% of games. Penalty: ×0.92 per dead member.
 const DEAD_SEL_THRESHOLD = 0.05; // 5% selection rate
 const DEAD_MEMBER_PENALTY = 0.92; // multiplicative per dead member
+
+// 3-Core Meta Evaluation constants
+const META_REPS_COUNT = 100;           // Number of meta representatives for core scoring
+const TOP_CORES_COUNT = 200;           // Number of top cores to keep in output
+const REFINE_CANDIDATES_PER_SLOT = 30; // Max candidates per dead slot for core-guided refinement
 
 // Self-KO moves (Explosion / Self-Destruct): user faints → 1:1 trade → 50% contribution
 const SELF_KO_MOVES = new Set(["Explosion", "Self-Destruct"]);
@@ -583,7 +591,12 @@ function refineTopTeams(
   matrix: DamageMatrix,
   primaryItem: Map<string, string>,
   topN: number,
+  metaReps: MetaRepresentative[] | null,
+  simEnv: SimEnv | null,
+  megaCapable: Set<string> | null,
 ): Team[] {
+  const coreGuided = metaReps !== null && metaReps.length > 0 && simEnv !== null && megaCapable !== null;
+
   // 1. Sort teams by win rate, pick top N
   const indices = teams.map((_, i) => i);
   indices.sort((a, b) => {
@@ -626,12 +639,14 @@ function refineTopTeams(
     );
     if (deadMembers.length === 0) continue;
 
-    // For each dead member, try replacing with every pool candidate
+    // For each dead member, collect valid candidates then optionally rank by core score
     for (const deadMember of deadMembers) {
       const remaining = team.members.filter(m => m !== deadMember);
       const usedSpecies = new Set(remaining.map(m => baseSpecies(m)));
       const usedItems = new Set(remaining.map(m => primaryItem.get(m) ?? ""));
 
+      // Collect all valid candidates
+      const candidates: { name: string; members: string[]; teamKey: string }[] = [];
       for (const candidate of pool) {
         const cName = candidate.name;
         const cSpecies = baseSpecies(cName);
@@ -649,16 +664,299 @@ function refineTopTeams(
         // Validate completeness
         if (!validateTeamCompleteness(newMembers, pool, matrix)) continue;
 
-        seenTeams.add(teamKey);
+        candidates.push({ name: cName, members: newMembers, teamKey });
+      }
+
+      // Core-guided: score and keep top K; otherwise keep all
+      let selected = candidates;
+      if (coreGuided && candidates.length > REFINE_CANDIDATES_PER_SLOT) {
+        const scored = candidates.map(c => ({
+          ...c,
+          coreScore: scoreCandidateByCore(c.name, remaining, metaReps!, matrix, simEnv!, megaCapable!),
+        }));
+        scored.sort((a, b) => b.coreScore - a.coreScore);
+        selected = scored.slice(0, REFINE_CANDIDATES_PER_SLOT);
+      }
+
+      for (const c of selected) {
+        seenTeams.add(c.teamKey);
         refined.push({
           id: `R${String(nextId++).padStart(5, "0")}`,
-          members: newMembers,
+          members: c.members,
         });
       }
     }
   }
 
   return refined;
+}
+
+// ── 3-Core Meta Evaluation ─────────────────────────────────────────────────
+
+/** Minimum heap: keeps the top-K items by score (lowest score evicted first). */
+class MinHeap<T> {
+  private heap: { score: number; item: T }[] = [];
+  constructor(private capacity: number) {}
+
+  push(score: number, item: T): void {
+    if (this.heap.length < this.capacity) {
+      this.heap.push({ score, item });
+      this._bubbleUp(this.heap.length - 1);
+    } else if (score > this.heap[0].score) {
+      this.heap[0] = { score, item };
+      this._sinkDown(0);
+    }
+  }
+
+  toSorted(): { score: number; item: T }[] {
+    return [...this.heap].sort((a, b) => b.score - a.score);
+  }
+
+  private _bubbleUp(i: number): void {
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (this.heap[i].score < this.heap[parent].score) {
+        [this.heap[i], this.heap[parent]] = [this.heap[parent], this.heap[i]];
+        i = parent;
+      } else break;
+    }
+  }
+
+  private _sinkDown(i: number): void {
+    const n = this.heap.length;
+    while (true) {
+      let smallest = i;
+      const left = 2 * i + 1, right = 2 * i + 2;
+      if (left < n && this.heap[left].score < this.heap[smallest].score) smallest = left;
+      if (right < n && this.heap[right].score < this.heap[smallest].score) smallest = right;
+      if (smallest === i) break;
+      [this.heap[i], this.heap[smallest]] = [this.heap[smallest], this.heap[i]];
+      i = smallest;
+    }
+  }
+}
+
+/**
+ * Aggregate selection patterns from Phase 4 into global meta representatives.
+ * Returns the top N most frequent 3-Pokemon selections, weighted by frequency.
+ */
+function extractMetaRepresentatives(
+  teamSelections: Map<number, Map<string, { count: number; wins: number }>>,
+  topN: number,
+): MetaRepresentative[] {
+  const global = new Map<string, { frequency: number; wins: number }>();
+  for (const [, selMap] of teamSelections) {
+    for (const [key, val] of selMap) {
+      const existing = global.get(key);
+      if (existing) {
+        existing.frequency += val.count;
+        existing.wins += val.wins;
+      } else {
+        global.set(key, { frequency: val.count, wins: val.wins });
+      }
+    }
+  }
+
+  const sorted = [...global.entries()]
+    .sort((a, b) => b[1].frequency - a[1].frequency)
+    .slice(0, topN);
+
+  const totalFreq = sorted.reduce((s, e) => s + e[1].frequency, 0);
+
+  return sorted.map(([key, val]) => ({
+    members: key.split("+"),
+    weight: totalFreq > 0 ? val.frequency / totalFreq : 1 / sorted.length,
+    frequency: val.frequency,
+    winRate: val.frequency > 0 ? val.wins / val.frequency : 0,
+  }));
+}
+
+/**
+ * Score all valid 3-Pokemon combos against meta representatives.
+ * Uses a MinHeap to keep only the top K cores in memory.
+ * Also accumulates per-Pokemon core statistics.
+ */
+function scoreCoresAgainstMeta(
+  pool: MetaPokemon[],
+  megaCapable: Set<string>,
+  metaReps: MetaRepresentative[],
+  matrix: DamageMatrix,
+  simEnv: SimEnv,
+  topK: number,
+): { topCores: CoreRanking[]; pokemonCoreStats: PokemonCoreStats[]; totalCoresEvaluated: number } {
+  // Group pool entries by base species
+  const speciesGroups = new Map<string, string[]>();
+  for (const p of pool) {
+    const bs = baseSpecies(p.name);
+    const group = speciesGroups.get(bs);
+    if (group) group.push(p.name);
+    else speciesGroups.set(bs, [p.name]);
+  }
+  const speciesKeys = [...speciesGroups.keys()].sort();
+  const S = speciesKeys.length;
+
+  // Per-Pokemon accumulators
+  const pokemonAcc = new Map<string, { scoreSum: number; count: number; maxScore: number }>();
+  // Per-pair accumulators: "A|B" → { scoreSum, count }
+  const pairAcc = new Map<string, { scoreSum: number; count: number }>();
+  for (const p of pool) pokemonAcc.set(p.name, { scoreSum: 0, count: 0, maxScore: 0 });
+
+  const heap = new MinHeap<string[]>(topK);
+  let totalCores = 0;
+
+  // Count total for progress (pre-compute rough estimate)
+  const startTime = Date.now();
+  let lastLog = startTime;
+
+  // Triple-loop over species groups
+  for (let i = 0; i < S - 2; i++) {
+    const formsI = speciesGroups.get(speciesKeys[i])!;
+    for (let j = i + 1; j < S - 1; j++) {
+      const formsJ = speciesGroups.get(speciesKeys[j])!;
+      for (let k = j + 1; k < S; k++) {
+        const formsK = speciesGroups.get(speciesKeys[k])!;
+
+        // Iterate form combinations
+        for (const fi of formsI) {
+          const mi = megaCapable.has(fi) ? 1 : 0;
+          for (const fj of formsJ) {
+            const mj = mi + (megaCapable.has(fj) ? 1 : 0);
+            if (mj > 1) continue;
+            for (const fk of formsK) {
+              if (mj + (megaCapable.has(fk) ? 1 : 0) > 1) continue;
+
+              // Score this trio against all meta reps
+              const trio = [fi, fj, fk];
+              let weightedScore = 0;
+
+              for (const rep of metaReps) {
+                const result = evaluate3v3(trio, rep.members, matrix, simEnv);
+                if (result.winner === "A") weightedScore += rep.weight;
+                else if (result.winner === "draw") weightedScore += rep.weight * 0.5;
+              }
+
+              heap.push(weightedScore, [...trio]);
+              totalCores++;
+
+              // Update per-Pokemon accumulators
+              for (const name of trio) {
+                const acc = pokemonAcc.get(name)!;
+                acc.scoreSum += weightedScore;
+                acc.count++;
+                if (weightedScore > acc.maxScore) acc.maxScore = weightedScore;
+              }
+
+              // Update pair accumulators
+              const pairs = [`${fi}|${fj}`, `${fi}|${fk}`, `${fj}|${fk}`];
+              for (const pairKey of pairs) {
+                const existing = pairAcc.get(pairKey);
+                if (existing) { existing.scoreSum += weightedScore; existing.count++; }
+                else pairAcc.set(pairKey, { scoreSum: weightedScore, count: 1 });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Progress logging every ~5 seconds
+    const now = Date.now();
+    if (now - lastLog > 5000) {
+      const pct = Math.round(((i + 1) / S) * 100);
+      const elapsed = ((now - startTime) / 1000).toFixed(1);
+      process.stdout.write(`  [core scoring] species ${i + 1}/${S} (${pct}%, ${totalCores} cores, ${elapsed}s)\n`);
+      lastLog = now;
+    }
+  }
+
+  // Build top cores output
+  const topCores: CoreRanking[] = heap.toSorted().map(({ score, item }) => ({
+    members: item,
+    score: Math.round(score * 1000) / 1000,
+    winCount: 0,  // filled below
+    totalReps: metaReps.length,
+  }));
+
+  // Fill winCount by re-evaluating top cores (cheap: only 200 × 100 = 20K calls)
+  for (const core of topCores) {
+    let wins = 0;
+    for (const rep of metaReps) {
+      const result = evaluate3v3(core.members, rep.members, matrix, simEnv);
+      if (result.winner === "A") wins++;
+    }
+    core.winCount = wins;
+  }
+
+  // Build per-Pokemon core stats with top partners
+  const pokemonCoreStats: PokemonCoreStats[] = [];
+  for (const [name, acc] of pokemonAcc) {
+    if (acc.count === 0) continue;
+
+    // Find top 10 partners for this Pokemon
+    const partners: { name: string; avgScore: number; count: number }[] = [];
+    for (const [pairKey, pairVal] of pairAcc) {
+      const [a, b] = pairKey.split("|");
+      if (a === name) partners.push({ name: b, avgScore: pairVal.scoreSum / pairVal.count, count: pairVal.count });
+      else if (b === name) partners.push({ name: a, avgScore: pairVal.scoreSum / pairVal.count, count: pairVal.count });
+    }
+    partners.sort((a, b) => b.avgScore - a.avgScore);
+
+    pokemonCoreStats.push({
+      name,
+      avgCoreScore: Math.round((acc.scoreSum / acc.count) * 1000) / 1000,
+      maxCoreScore: Math.round(acc.maxScore * 1000) / 1000,
+      trioCount: acc.count,
+      topPartners: partners.slice(0, 10).map(p => ({
+        name: p.name,
+        avgScore: Math.round(p.avgScore * 1000) / 1000,
+        count: p.count,
+      })),
+    });
+  }
+  pokemonCoreStats.sort((a, b) => b.avgCoreScore - a.avgCoreScore);
+
+  return { topCores, pokemonCoreStats, totalCoresEvaluated: totalCores };
+}
+
+/**
+ * Score a replacement candidate by evaluating all trios it forms with the
+ * remaining 5 team members against meta representatives.
+ */
+function scoreCandidateByCore(
+  candidate: string,
+  remainingMembers: string[],
+  metaReps: MetaRepresentative[],
+  matrix: DamageMatrix,
+  simEnv: SimEnv,
+  megaCapable: Set<string>,
+): number {
+  const candIsMega = megaCapable.has(candidate);
+  let totalScore = 0;
+  let validTrios = 0;
+
+  // C(5,2) = 10 pairs from remaining members
+  for (let i = 0; i < remainingMembers.length - 1; i++) {
+    for (let j = i + 1; j < remainingMembers.length; j++) {
+      // Max 1 mega per trio
+      let megas = candIsMega ? 1 : 0;
+      if (megaCapable.has(remainingMembers[i])) megas++;
+      if (megas > 1) continue;
+      if (megaCapable.has(remainingMembers[j])) megas++;
+      if (megas > 1) continue;
+
+      const trio = [candidate, remainingMembers[i], remainingMembers[j]];
+      let weightedScore = 0;
+      for (const rep of metaReps) {
+        const result = evaluate3v3(trio, rep.members, matrix, simEnv);
+        if (result.winner === "A") weightedScore += rep.weight;
+        else if (result.winner === "draw") weightedScore += rep.weight * 0.5;
+      }
+      totalScore += weightedScore;
+      validTrios++;
+    }
+  }
+
+  return validTrios > 0 ? totalScore / validTrios : 0;
 }
 
 // ── Selection Algorithm ─────────────────────────────────────────────────────
@@ -1509,7 +1807,8 @@ function main() {
 
   const originalPoolSize = (singlesData.pokemon as any[]).length;
   const poolFiltered = originalPoolSize - allMeta.length;
-  console.log(`[1/7] Pool: ${allMeta.length} Pokemon (${poolFiltered} filtered: <${MIN_MOVE_COUNT} moves)`);
+  const skipCores = args.includes("--skip-cores");
+  console.log(`[1/8] Pool: ${allMeta.length} Pokemon (${poolFiltered} filtered: <${MIN_MOVE_COUNT} moves)`);
 
   // ─── Phase 1b: Split mega-capable Pokemon into base + mega entries ────
   // This allows non-mega builds (e.g., Choice Scarf Garchomp) to be freely
@@ -1574,7 +1873,7 @@ function main() {
 
   // ─── Phase 2: Damage matrix ──────────────────────────────────────────
 
-  console.log(`[2/7] Computing damage matrix...`);
+  console.log(`[2/8] Computing damage matrix...`);
   const { matrix, totalCalcs } = buildDamageMatrix(expandedPool);
   console.log(`  ${totalCalcs} calculations (${expandedPool.length}×${expandedPool.length} pairs)`);
 
@@ -1635,14 +1934,14 @@ function main() {
 
   // ─── Phase 3: Generate teams (with item exclusivity) ──────────────────
 
-  console.log(`[3/7] Generating ${totalTeams} teams (item exclusivity + completeness validation)...`);
+  console.log(`[3/8] Generating ${totalTeams} teams (item exclusivity + completeness validation)...`);
   const primaryItem = buildPrimaryItemMap(expandedPool);
   const { teams, validationRejects } = generateTeams(expandedPool, totalTeams, rng, matrix, primaryItem);
   console.log(`  Generated ${teams.length} teams (${validationRejects} rejected for dead-weight members)`);
 
   // ─── Phase 4: Round-robin evaluation (max 1 mega per selection) ───────
 
-  console.log(`[4/7] Running ${totalTeams} × ${gamesPerTeam} matchups...`);
+  console.log(`[4/8] Running ${totalTeams} × ${gamesPerTeam} matchups...`);
 
   // Per-team tracking
   const teamWins: number[] = new Array(totalTeams).fill(0);
@@ -1715,17 +2014,45 @@ function main() {
   let totalMatchups = runMatchups(0, totalTeams);
   console.log(`  Total matchups: ${totalMatchups}`);
 
-  // ─── Phase 5: Team refinement ──────────────────────────────────────
-  // Replace dead-weight members in top teams with every viable pool candidate,
-  // then evaluate the refined teams to find pure upgrades.
+  // ─── Phase 5: 3-Core Meta Evaluation (optional) ─────────────────────
 
-  console.log(`[5/7] Refining top teams (replacing dead-weight members)...`);
+  let metaReps: MetaRepresentative[] = [];
+  let coreResult: { topCores: CoreRanking[]; pokemonCoreStats: PokemonCoreStats[]; totalCoresEvaluated: number } | null = null;
+
+  if (!skipCores) {
+    console.log(`[5/8] 3-Core Meta Evaluation...`);
+    const coreStart = Date.now();
+
+    // 5a. Extract meta representatives from Phase 4 selection patterns
+    metaReps = extractMetaRepresentatives(teamSelections, META_REPS_COUNT);
+    console.log(`  Meta representatives: ${metaReps.length} (top: ${metaReps[0]?.members.join("+")} freq=${metaReps[0]?.frequency})`);
+
+    // 5b. Score all valid 3-combos against meta reps
+    coreResult = scoreCoresAgainstMeta(
+      expandedPool, megaCapable, metaReps, matrix, simEnv, TOP_CORES_COUNT,
+    );
+    const coreElapsed = ((Date.now() - coreStart) / 1000).toFixed(1);
+    console.log(`  Evaluated ${coreResult.totalCoresEvaluated} cores in ${coreElapsed}s`);
+    console.log(`  Top 3 cores:`);
+    for (const core of coreResult.topCores.slice(0, 3)) {
+      console.log(`    ${core.members.join(" + ")} → score ${core.score} (${core.winCount}/${core.totalReps} wins)`);
+    }
+  } else {
+    console.log(`[5/8] Skipping 3-Core Meta Evaluation (--skip-cores)`);
+  }
+
+  // ─── Phase 6: Team refinement (core-guided if available) ──────────
+
+  console.log(`[6/8] Refining top teams (replacing dead-weight members)...`);
   const REFINE_TOP_N = 100;
   const refinedTeams = refineTopTeams(
     teams, teamWins, teamLosses, teamDraws,
     teamSelections, expandedPool, matrix, primaryItem, REFINE_TOP_N,
+    coreResult ? metaReps : null,
+    coreResult ? simEnv : null,
+    coreResult ? megaCapable : null,
   );
-  console.log(`  Generated ${refinedTeams.length} refined team variants`);
+  console.log(`  Generated ${refinedTeams.length} refined team variants${coreResult ? " (core-guided)" : ""}`);
 
   if (refinedTeams.length > 0) {
     const oldLen = teams.length;
@@ -1742,9 +2069,9 @@ function main() {
     console.log(`  Refined team matchups: ${refinedMatchups} (total: ${totalMatchups})`);
   }
 
-  // ─── Phase 6: Ranking with threat analysis ─────────────────────────
+  // ─── Phase 7: Ranking with threat analysis ─────────────────────────
 
-  console.log(`[6/7] Ranking teams (with threat analysis)...`);
+  console.log(`[7/8] Ranking teams (with threat analysis)...`);
 
   // Build ranked team list with threat profiles
   const rankedTeams: RankedTeam[] = teams.map((team, ti) => {
@@ -1846,7 +2173,7 @@ function main() {
 
   // ─── Phase 6: Pokemon stats + Output ─────────────────────────────────
 
-  console.log(`\n[7/7] Computing stats & writing output...`);
+  console.log(`\n[8/8] Computing stats & writing output...`);
 
   const pokemonStats = computePokemonStats(topTeams, teams, selectionLog);
 
@@ -1894,6 +2221,16 @@ function main() {
     damageMatrix: matrix,
     topTeams,
     pokemonStats,
+    ...(coreResult ? {
+      topCores: coreResult.topCores,
+      pokemonCoreStats: coreResult.pokemonCoreStats,
+      metaRepresentatives: metaReps.map(r => ({
+        members: r.members,
+        weight: Math.round(r.weight * 10000) / 10000,
+        frequency: r.frequency,
+        winRate: Math.round(r.winRate * 1000) / 1000,
+      })),
+    } : {}),
   };
 
   const outPath = resolve(STORAGE, `analysis/${dateArg}-team-matchup.json`);
@@ -1916,6 +2253,21 @@ function main() {
       `Sel=${(ps.selectionRate * 100).toFixed(0)}% ` +
       `WR=${(ps.winRateWhenSelected * 100).toFixed(1)}%`,
     );
+  }
+
+  // Print core evaluation stats
+  if (coreResult) {
+    console.log(`\n=== Top 10 3-Pokemon Cores ===`);
+    for (const core of coreResult.topCores.slice(0, 10)) {
+      console.log(`  ${core.members.join(" + ").padEnd(60)} score=${core.score} (${core.winCount}/${core.totalReps} wins)`);
+    }
+    console.log(`\n=== Pokemon Core Value (Top 15) ===`);
+    for (const ps of coreResult.pokemonCoreStats.slice(0, 15)) {
+      console.log(
+        `  ${ps.name.padEnd(20)} avg=${ps.avgCoreScore} max=${ps.maxCoreScore} trios=${ps.trioCount}` +
+        `  partners: ${ps.topPartners.slice(0, 3).map(p => p.name).join(", ")}`,
+      );
+    }
   }
 }
 

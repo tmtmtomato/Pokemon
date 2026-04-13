@@ -261,37 +261,93 @@ function evaluate3v3(selA: string[], selB: string[]): {
 
 ---
 
-## 7. パイプライン全体フロー
+## 7. パイプライン全体フロー (8フェーズ)
 
 ```
-[1] ビルド生成 (既存流用)
-    49体 × 各複数ビルド → 代表ビルド49体
-          ↓
-[2] ダメージ行列計算
-    49×49×~3.5技 ≈ 8,400回 → DamageMatrix
-          ↓
-[3] 構築生成
-    10,000チーム (6体ずつ)
-          ↓
-[4] ラウンドロビン評価
-    各チーム vs ランダム200対戦相手
-    = 2,000,000回の選出+評価 (行列参照のみ、高速)
-          ↓
-[5] 集計
-    勝率でソート → TOP 50構築
-    各構築の選出パターンを集計
-          ↓
-[6] JSON出力
-    {date}-team-matchup.json
+[1/8] Pool building
+      singles-ranking出力からビルドロード → メガ分離 → 拡張プール (~257エントリ)
+      品質ゲート: 技数 < 2 の個体を除外
+                ↓
+[2/8] ダメージ行列計算
+      257×257×平均3.5技 ≈ 252,000回 → DamageMatrix + SimEnv (天候/SR/砂チップ)
+                ↓
+[3/8] 構築生成 (モンテカルロ)
+      10,000チーム × 6体 (アイテム排他 + 種族排他 + 役割検証)
+      roleScore < 25 のメンバーがいるチームは棄却 (50K回再試行上限)
+                ↓
+[4/8] ラウンドロビン評価
+      各チーム vs ランダム200対戦相手 → selectTeam(3体選出) + evaluate3v3
+      天候・SR・先制技・反動・チップダメージを考慮
+                ↓
+[5/8] 3-Core メタ評価 ★NEW
+      Phase 4の選出パターンからメタ代表100チームを抽出
+      全有効3体コンボ (~2.4M通り) をメタ代表に対してevaluate3v3で評価
+      制約: 同種族不可 + メガ最大1体
+      コンボスコア = 重み付き勝率 (win=1, draw=0.5, loss=0)
+      → 上位200コア + ポケモン別コア統計 + トップパートナー情報
+                ↓
+[6/8] 精練 (core-guided refinement)
+      上位100チームの死に枠 (選出率<5%) を特定
+      各死に枠をプール全候補で入れ替え → scoreCandidateByCore()で候補をランキング
+      上位30候補のみフルシミュレーション (200ゲーム)
+      死に枠ペナルティ: DEAD_MEMBER_PENALTY = ×0.92/枠
+                ↓
+[7/8] ランキング (脅威分析付き)
+      勝率×支配度×死に枠ペナルティでスコア化 → TOP 50構築
+      各構築の脅威プロファイル: 殺意/脅威耐性/使用率加重回答率/critical gap
+      メガ排他を考慮した回答チェック (非メガ回答優先)
+                ↓
+[8/8] JSON出力
+      {date}-team-matchup.json (topTeams + topCores + pokemonCoreStats)
 ```
 
 ### 計算量見積もり
 | フェーズ | 計算量 | 所要時間 |
 |---------|--------|---------|
-| ダメージ行列 | ~8,400回 calculate() | ~2秒 |
-| 構築生成 | 10,000チーム | <0.1秒 |
-| 選出+評価 | 2,000,000回 (配列参照のみ) | ~3-5秒 |
-| **合計** | | **~10秒** |
+| ダメージ行列 | ~252,000回 calculate() | ~8秒 |
+| 構築生成 | 10,000チーム (+ ~3,500棄却) | ~1秒 |
+| 選出+評価 | 2,000,000回 | ~20秒 |
+| 3-Core評価 | ~2.4M × 100 evaluate3v3 | ~5分 |
+| 精練 (core-guided) | ~2,200チーム × 200ゲーム | ~10秒 |
+| 脅威分析 | 50チーム × 257対面 | ~2秒 |
+| **合計** | | **~6分** |
+
+`--skip-cores` フラグで Phase 5 をスキップ → 従来の全数精練にフォールバック (~54秒)
+
+---
+
+## 7b. 3-Core メタ評価 (Phase 5/8) ★NEW
+
+### 目的
+全有効3体コンボ (~2.4M通り) を網羅的に評価し、チーム構築分析とコアガイド精練に活用する。
+
+### メタ代表の抽出
+Phase 4 の `teamSelections` から全チーム横断で3体選出パターンの頻度を集計。
+上位100パターンを「メタ代表」として正規化した重み (合計=1) で使用。
+
+### 3体コンボ列挙
+- プールをbaseSpeciesでグループ化 (~200種族)
+- 3重ループで全種族トリプルを列挙、各形態の組み合わせを展開
+- 制約: **同種族不可** + **メガ最大1体** (selectTeamと同じ制約)
+- 結果: ~2,436,000通り (257エントリ、57メガ持ち種のプールで)
+
+### スコアリング
+各コンボを100メタ代表に対して `evaluate3v3()` で評価:
+- 勝ち: weight × 1.0、引分: weight × 0.5、負け: 0
+- コンボスコア = 重み付き勝率 (0-1)
+
+### 出力データ
+- **topCores (200)**: 上位200の3体コア (メンバー、スコア、勝数)
+- **pokemonCoreStats**: ポケモン別コア統計 (平均スコア、最大スコア、トリオ数、トップパートナー10体)
+- **metaRepresentatives**: 評価に使用したメタ代表100チーム
+
+### コアガイド精練への活用
+死に枠入れ替え候補を `scoreCandidateByCore()` でランキング:
+1. 候補Xと残り5体からC(5,2)=10ペアを生成
+2. 各ペア + 候補で3体コンボ形成 (メガ制約チェック)
+3. 各コンボを100メタ代表に対して evaluate3v3 で評価
+4. 有効コンボのスコア平均 → 候補スコア
+5. 上位30候補のみフルシミュレーションに進む
 
 ---
 
@@ -309,13 +365,19 @@ interface TeamMatchupResult {
   generatedAt: string;
   format: string;
   config: {
-    totalTeams: number;       // 生成したチーム数
-    gamesPerTeam: number;     // 各チームの対戦数
-    poolSize: number;         // ポケモンプール数 (49)
+    totalTeams: number;
+    gamesPerTeam: number;
+    poolSize: number;         // 拡張プールサイズ (~257)
+    poolFiltered?: number;    // 品質フィルタで除外した数
+    teamsRejected?: number;   // 役割検証で棄却した数
   };
-  damageMatrix: Record<string, Record<string, DamageMatrixEntry>>;
-  topTeams: RankedTeam[];     // TOP 50
-  pokemonStats: PokemonTeamStats[];  // 各ポケモンの出場統計
+  pool: PoolMember[];
+  damageMatrix: DamageMatrix;
+  topTeams: RankedTeam[];      // TOP 50
+  pokemonStats: PokemonTeamStats[];
+  topCores?: CoreRanking[];            // ★NEW: 上位200の3体コア
+  pokemonCoreStats?: PokemonCoreStats[]; // ★NEW: ポケモン別コア統計
+  metaRepresentatives?: MetaRepresentative[]; // ★NEW: メタ代表100チーム
 }
 
 interface DamageMatrixEntry {
@@ -325,39 +387,81 @@ interface DamageMatrixEntry {
   koN: number;
   koChance: number;
   effectiveness: number;
+  isContact: boolean;
+  chipPctToAttacker: number;
+  weatherChipToDefender: number;
+  priorityMaxPct: number;      // 先制技の最大ダメージ%
+  priorityKoN: number;
+  priorityKoChance: number;
+  recoilPctToSelf: number;     // 反動ダメージ%
 }
 
 interface RankedTeam {
   rank: number;
   teamId: string;
-  members: string[];          // 6体の名前
-  winRate: number;            // 勝率 (0-1)
+  members: string[];
+  winRate: number;
   wins: number;
   losses: number;
   draws: number;
-  avgScore: number;           // 平均scoreA (3v3評価の自軍スコア平均)
-  commonSelections: SelectionPattern[];  // よく出る選出パターンTOP3
+  avgScore: number;
+  commonSelections: SelectionPattern[];   // TOP 5 選出パターン
+  memberSelectionRates: MemberSelectionRate[];  // メンバー別選出率
+  deadMemberCount: number;                      // 死に枠数
   typeProfile: {
-    offensiveTypes: string[];  // チームの攻撃範囲 (SE取れるタイプ)
-    defensiveWeaks: string[];  // チームの共通弱点
+    offensiveTypes: string[];
+    defensiveWeaks: string[];
   };
+  threatProfile?: ThreatProfile;   // 脅威プロファイル
+}
+
+interface CoreRanking {
+  members: string[];    // ソート済み3体名
+  score: number;        // 重み付き勝率 (0-1)
+  winCount: number;     // 勝利メタ代表数
+  totalReps: number;
+}
+
+interface PokemonCoreStats {
+  name: string;
+  avgCoreScore: number;
+  maxCoreScore: number;
+  trioCount: number;
+  topPartners: { name: string; avgScore: number; count: number }[];
+}
+
+interface MetaRepresentative {
+  members: string[];
+  weight: number;      // 正規化頻度 (合計=1)
+  frequency: number;   // 生観測回数
+  winRate: number;
+}
+
+interface MemberSelectionRate {
+  name: string;
+  selectionRate: number;      // 選出率 (0-1)
+  winRateWhenSelected: number; // 選出時勝率 (0-1)
+}
+
+interface ThreatProfile {
+  killPressure: number;      // 0-100: 殺意
+  threatResistance: number;  // 0-100: 脅威耐性
+  answerRate: number;        // 0-100: 使用率加重回答率
+  dominanceScore: number;    // 0-100: 支配度
+  criticalGaps: number;      // TOP10使用率で回答なしの数
 }
 
 interface SelectionPattern {
-  members: string[];          // 選出3体
-  frequency: number;          // この選出が出た回数
-  winRate: number;            // この選出での勝率
+  members: string[];
+  frequency: number;
+  winRate: number;
 }
 
 interface PokemonTeamStats {
   name: string;
-  /** TOP50構築への採用率 */
   pickRate: number;
-  /** 選出された回数 / チームに入っていた回数 */
   selectionRate: number;
-  /** 選出された試合での勝率 */
   winRateWhenSelected: number;
-  /** よく一緒に選出される相方 TOP3 */
   commonPartners: { name: string; count: number }[];
 }
 ```

@@ -143,6 +143,31 @@ export interface PokemonTeamStats {
   commonPartners: { name: string; count: number }[];
 }
 
+/** A 3-Pokemon core ranked by weighted win rate against meta representatives */
+export interface CoreRanking {
+  members: string[];
+  score: number;       // Weighted win rate (0-1)
+  winCount: number;    // Number of meta reps beaten (unweighted)
+  totalReps: number;
+}
+
+/** Per-Pokemon statistics derived from 3-core evaluation */
+export interface PokemonCoreStats {
+  name: string;
+  avgCoreScore: number;
+  maxCoreScore: number;
+  trioCount: number;
+  topPartners: { name: string; avgScore: number; count: number }[];
+}
+
+/** A meta representative: a 3-Pokemon selection pattern from Phase 4 */
+export interface MetaRepresentative {
+  members: string[];
+  weight: number;      // Normalized frequency (sum = 1)
+  frequency: number;   // Raw observation count
+  winRate: number;
+}
+
 /** Root output document */
 export interface TeamMatchupResult {
   generatedAt: string;
@@ -158,4 +183,7 @@ export interface TeamMatchupResult {
   damageMatrix: DamageMatrix;
   topTeams: RankedTeam[];
   pokemonStats: PokemonTeamStats[];
+  topCores?: CoreRanking[];
+  pokemonCoreStats?: PokemonCoreStats[];
+  metaRepresentatives?: MetaRepresentative[];
 }
