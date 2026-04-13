@@ -472,11 +472,22 @@ function validateTeamCompleteness(
 
 // ── Team Generation ─────────────────────────────────────────────────────────
 
+/** Precompute primary item for each pool member (for item exclusivity). */
+function buildPrimaryItemMap(pool: MetaPokemon[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const p of pool) {
+    const best = p.builds.reduce((a, b) => b.weight > a.weight ? b : a);
+    m.set(p.name, best.item);
+  }
+  return m;
+}
+
 function generateTeams(
   pool: MetaPokemon[],
   count: number,
   rng: () => number,
   matrix: DamageMatrix,
+  primaryItem: Map<string, string>,
 ): { teams: Team[]; validationRejects: number } {
   const teams: Team[] = [];
   let validationRejects = 0;
@@ -494,13 +505,6 @@ function generateTeams(
 
   // Track mega-capable Pokemon
   const megaCapable = new Set(pool.filter((p) => p.builds.some((b) => b.isMega)).map((p) => p.name));
-
-  // Precompute primary item for each pool member (for item exclusivity)
-  const primaryItem = new Map<string, string>();
-  for (const p of pool) {
-    const best = p.builds.reduce((a, b) => b.weight > a.weight ? b : a);
-    primaryItem.set(p.name, best.item);
-  }
 
   for (let t = 0; t < count; t++) {
     const members: string[] = [];
@@ -553,6 +557,108 @@ function generateTeams(
   }
 
   return { teams, validationRejects };
+}
+
+// ── Team Refinement ─────────────────────────────────────────────────────────
+
+/**
+ * Refine top teams by replacing dead-weight members (selection rate < threshold)
+ * with every viable pool candidate. Returns newly generated teams to be appended
+ * to the main teams array and evaluated via the matchup loop.
+ *
+ * For each dead-weight slot, iterate the pool and try each candidate as a
+ * replacement. The candidate must satisfy:
+ *   - No species overlap with the remaining 5 members
+ *   - No item overlap with the remaining 5 members
+ *   - validateTeamCompleteness passes
+ *   - Not a duplicate of an already-seen team (checked via sorted member key)
+ */
+function refineTopTeams(
+  teams: Team[],
+  teamWins: number[],
+  teamLosses: number[],
+  teamDraws: number[],
+  teamSelections: Map<number, Map<string, { count: number; wins: number }>>,
+  pool: MetaPokemon[],
+  matrix: DamageMatrix,
+  primaryItem: Map<string, string>,
+  topN: number,
+): Team[] {
+  // 1. Sort teams by win rate, pick top N
+  const indices = teams.map((_, i) => i);
+  indices.sort((a, b) => {
+    const gamesA = teamWins[a] + teamLosses[a] + teamDraws[a];
+    const gamesB = teamWins[b] + teamLosses[b] + teamDraws[b];
+    const wrA = gamesA > 0 ? teamWins[a] / gamesA : 0;
+    const wrB = gamesB > 0 ? teamWins[b] / gamesB : 0;
+    return wrB - wrA;
+  });
+  const topIndices = indices.slice(0, topN);
+
+  const seenTeams = new Set<string>();
+  // Register all existing teams to avoid duplicates
+  for (const t of teams) {
+    seenTeams.add([...t.members].sort().join("+"));
+  }
+
+  const refined: Team[] = [];
+  let nextId = teams.length + 1;
+
+  for (const ti of topIndices) {
+    const team = teams[ti];
+    const totalGames = teamWins[ti] + teamLosses[ti] + teamDraws[ti];
+    if (totalGames === 0) continue;
+
+    // Compute per-member selection rates from selMap
+    const selMap = teamSelections.get(ti);
+    if (!selMap) continue;
+    const memberCounts = new Map<string, number>();
+    team.members.forEach(m => memberCounts.set(m, 0));
+    for (const [key, val] of selMap.entries()) {
+      for (const name of key.split("+")) {
+        memberCounts.set(name, (memberCounts.get(name) ?? 0) + val.count);
+      }
+    }
+
+    // Find dead-weight members
+    const deadMembers = team.members.filter(
+      m => (memberCounts.get(m) ?? 0) / totalGames < DEAD_SEL_THRESHOLD,
+    );
+    if (deadMembers.length === 0) continue;
+
+    // For each dead member, try replacing with every pool candidate
+    for (const deadMember of deadMembers) {
+      const remaining = team.members.filter(m => m !== deadMember);
+      const usedSpecies = new Set(remaining.map(m => baseSpecies(m)));
+      const usedItems = new Set(remaining.map(m => primaryItem.get(m) ?? ""));
+
+      for (const candidate of pool) {
+        const cName = candidate.name;
+        const cSpecies = baseSpecies(cName);
+        const cItem = primaryItem.get(cName) ?? "";
+
+        // Constraints
+        if (usedSpecies.has(cSpecies)) continue;
+        if (usedItems.has(cItem)) continue;
+        if (remaining.includes(cName)) continue;
+
+        const newMembers = [...remaining, cName];
+        const teamKey = [...newMembers].sort().join("+");
+        if (seenTeams.has(teamKey)) continue;
+
+        // Validate completeness
+        if (!validateTeamCompleteness(newMembers, pool, matrix)) continue;
+
+        seenTeams.add(teamKey);
+        refined.push({
+          id: `R${String(nextId++).padStart(5, "0")}`,
+          members: newMembers,
+        });
+      }
+    }
+  }
+
+  return refined;
 }
 
 // ── Selection Algorithm ─────────────────────────────────────────────────────
@@ -1403,7 +1509,7 @@ function main() {
 
   const originalPoolSize = (singlesData.pokemon as any[]).length;
   const poolFiltered = originalPoolSize - allMeta.length;
-  console.log(`[1/6] Pool: ${allMeta.length} Pokemon (${poolFiltered} filtered: <${MIN_MOVE_COUNT} moves)`);
+  console.log(`[1/7] Pool: ${allMeta.length} Pokemon (${poolFiltered} filtered: <${MIN_MOVE_COUNT} moves)`);
 
   // ─── Phase 1b: Split mega-capable Pokemon into base + mega entries ────
   // This allows non-mega builds (e.g., Choice Scarf Garchomp) to be freely
@@ -1468,7 +1574,7 @@ function main() {
 
   // ─── Phase 2: Damage matrix ──────────────────────────────────────────
 
-  console.log(`[2/6] Computing damage matrix...`);
+  console.log(`[2/7] Computing damage matrix...`);
   const { matrix, totalCalcs } = buildDamageMatrix(expandedPool);
   console.log(`  ${totalCalcs} calculations (${expandedPool.length}×${expandedPool.length} pairs)`);
 
@@ -1529,13 +1635,14 @@ function main() {
 
   // ─── Phase 3: Generate teams (with item exclusivity) ──────────────────
 
-  console.log(`[3/6] Generating ${totalTeams} teams (item exclusivity + completeness validation)...`);
-  const { teams, validationRejects } = generateTeams(expandedPool, totalTeams, rng, matrix);
+  console.log(`[3/7] Generating ${totalTeams} teams (item exclusivity + completeness validation)...`);
+  const primaryItem = buildPrimaryItemMap(expandedPool);
+  const { teams, validationRejects } = generateTeams(expandedPool, totalTeams, rng, matrix, primaryItem);
   console.log(`  Generated ${teams.length} teams (${validationRejects} rejected for dead-weight members)`);
 
   // ─── Phase 4: Round-robin evaluation (max 1 mega per selection) ───────
 
-  console.log(`[4/6] Running ${totalTeams} × ${gamesPerTeam} matchups...`);
+  console.log(`[4/7] Running ${totalTeams} × ${gamesPerTeam} matchups...`);
 
   // Per-team tracking
   const teamWins: number[] = new Array(totalTeams).fill(0);
@@ -1547,65 +1654,97 @@ function main() {
   const selectionLog = new Map<string, { teamId: string; selected: string[]; won: boolean }[]>();
   for (const meta of expandedPool) selectionLog.set(meta.name, []);
 
-  // For each team, pick random opponents
-  let totalMatchups = 0;
-  for (let ti = 0; ti < totalTeams; ti++) {
-    const myTeam = teams[ti];
-    const selMap = new Map<string, { count: number; wins: number }>();
-    teamSelections.set(ti, selMap);
-
-    for (let g = 0; g < gamesPerTeam; g++) {
-      // Pick random opponent (different from self)
-      let oi = ti;
-      while (oi === ti) oi = Math.floor(rng() * totalTeams);
-      const oppTeam = teams[oi];
-
-      // Select 3 from each (mega constraint: max 1 mega per selection)
-      const selA = selectTeam(myTeam.members, oppTeam.members, matrix, megaCapable);
-      const selB = selectTeam(oppTeam.members, myTeam.members, matrix, megaCapable);
-
-      // Evaluate
-      const result = evaluate3v3(selA.members, selB.members, matrix, simEnv);
-      totalMatchups++;
-
-      if (result.winner === "A") {
-        teamWins[ti]++;
-        teamLosses[oi]++;
-      } else if (result.winner === "B") {
-        teamLosses[ti]++;
-        teamWins[oi]++;
-      } else {
-        teamDraws[ti]++;
-        teamDraws[oi]++;
+  /** Run matchups for teams[startIdx..endIdx). Opponents drawn from ALL teams. */
+  function runMatchups(startIdx: number, endIdx: number): number {
+    let matchups = 0;
+    const totalLen = teams.length;
+    for (let ti = startIdx; ti < endIdx; ti++) {
+      const myTeam = teams[ti];
+      let selMap = teamSelections.get(ti);
+      if (!selMap) {
+        selMap = new Map();
+        teamSelections.set(ti, selMap);
       }
 
-      teamScoreSum[ti] += result.scoreA;
+      for (let g = 0; g < gamesPerTeam; g++) {
+        // Pick random opponent (different from self)
+        let oi = ti;
+        while (oi === ti) oi = Math.floor(rng() * totalLen);
+        const oppTeam = teams[oi];
 
-      // Track selection pattern
-      const selKey = [...selA.members].sort().join("+");
-      const existing = selMap.get(selKey) ?? { count: 0, wins: 0 };
-      existing.count++;
-      if (result.winner === "A") existing.wins++;
-      selMap.set(selKey, existing);
+        const selA = selectTeam(myTeam.members, oppTeam.members, matrix, megaCapable);
+        const selB = selectTeam(oppTeam.members, myTeam.members, matrix, megaCapable);
+        const result = evaluate3v3(selA.members, selB.members, matrix, simEnv);
+        matchups++;
 
-      // Log selections for Pokemon stats
-      for (const name of myTeam.members) {
-        selectionLog.get(name)!.push({
-          teamId: myTeam.id,
-          selected: selA.members,
-          won: result.winner === "A",
-        });
+        if (result.winner === "A") {
+          teamWins[ti]++;
+          teamLosses[oi]++;
+        } else if (result.winner === "B") {
+          teamLosses[ti]++;
+          teamWins[oi]++;
+        } else {
+          teamDraws[ti]++;
+          teamDraws[oi]++;
+        }
+
+        teamScoreSum[ti] += result.scoreA;
+
+        const selKey = [...selA.members].sort().join("+");
+        const existing = selMap.get(selKey) ?? { count: 0, wins: 0 };
+        existing.count++;
+        if (result.winner === "A") existing.wins++;
+        selMap.set(selKey, existing);
+
+        for (const name of myTeam.members) {
+          selectionLog.get(name)?.push({
+            teamId: myTeam.id,
+            selected: selA.members,
+            won: result.winner === "A",
+          });
+        }
+      }
+
+      if ((ti - startIdx + 1) % 1000 === 0) {
+        process.stdout.write(`  ${ti - startIdx + 1}/${endIdx - startIdx}\n`);
       }
     }
-
-    if ((ti + 1) % 1000 === 0) process.stdout.write(`  ${ti + 1}/${totalTeams}\n`);
+    return matchups;
   }
 
+  let totalMatchups = runMatchups(0, totalTeams);
   console.log(`  Total matchups: ${totalMatchups}`);
 
-  // ─── Phase 5: Ranking with threat analysis ─────────────────────────
+  // ─── Phase 5: Team refinement ──────────────────────────────────────
+  // Replace dead-weight members in top teams with every viable pool candidate,
+  // then evaluate the refined teams to find pure upgrades.
 
-  console.log(`[5/6] Ranking teams (with threat analysis)...`);
+  console.log(`[5/7] Refining top teams (replacing dead-weight members)...`);
+  const REFINE_TOP_N = 100;
+  const refinedTeams = refineTopTeams(
+    teams, teamWins, teamLosses, teamDraws,
+    teamSelections, expandedPool, matrix, primaryItem, REFINE_TOP_N,
+  );
+  console.log(`  Generated ${refinedTeams.length} refined team variants`);
+
+  if (refinedTeams.length > 0) {
+    const oldLen = teams.length;
+    teams.push(...refinedTeams);
+    // Extend tracking arrays
+    for (let i = 0; i < refinedTeams.length; i++) {
+      teamWins.push(0);
+      teamLosses.push(0);
+      teamDraws.push(0);
+      teamScoreSum.push(0);
+    }
+    const refinedMatchups = runMatchups(oldLen, teams.length);
+    totalMatchups += refinedMatchups;
+    console.log(`  Refined team matchups: ${refinedMatchups} (total: ${totalMatchups})`);
+  }
+
+  // ─── Phase 6: Ranking with threat analysis ─────────────────────────
+
+  console.log(`[6/7] Ranking teams (with threat analysis)...`);
 
   // Build ranked team list with threat profiles
   const rankedTeams: RankedTeam[] = teams.map((team, ti) => {
@@ -1707,7 +1846,7 @@ function main() {
 
   // ─── Phase 6: Pokemon stats + Output ─────────────────────────────────
 
-  console.log(`\n[6/6] Computing stats & writing output...`);
+  console.log(`\n[7/7] Computing stats & writing output...`);
 
   const pokemonStats = computePokemonStats(topTeams, teams, selectionLog);
 
