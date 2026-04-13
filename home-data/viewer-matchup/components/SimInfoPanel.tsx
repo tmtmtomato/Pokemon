@@ -42,7 +42,7 @@ const SECTIONS: Section[] = [
       { ja: "どしょく → 地面無効", en: "Earth Eater → Ground immune" },
       { ja: "たいねつボディ → 炎無効", en: "Well-Baked Body → Fire immune" },
       { ja: "かんそうはだ → 水無効 / 炎1.25倍", en: "Dry Skin → Water immune / Fire 1.25x" },
-      { ja: "※ かたやぶり系で貫通", en: "* Bypassed by Mold Breaker variants" },
+      { ja: "※ かたやぶり / テラボルテージ / ターボブレイズ で貫通", en: "* Bypassed by Mold Breaker / Teravolt / Turboblaze" },
     ],
   },
   {
@@ -59,14 +59,16 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    titleJa: "天候: 砂嵐 (すなおこし)",
-    titleEn: "Weather: Sandstorm (Sand Stream)",
+    titleJa: "天候システム",
+    titleEn: "Weather System",
     items: [
-      { ja: "岩タイプ特防 1.5倍 (ダメージ計算に反映)", en: "Rock-type SpD 1.5x (applied in damage calc)" },
-      { ja: "非岩/地/鋼タイプに 6.25%/ターン チップ", en: "6.25%/turn chip to non-Rock/Ground/Steel" },
-      { ja: "すなのちから → 岩/地/鋼技 1.3倍", en: "Sand Force → Rock/Ground/Steel moves 1.3x" },
+      { ja: "すなおこし (砂嵐): 岩タイプ特防1.5倍 + 非岩/地/鋼に6.25%チップ", en: "Sand Stream: Rock SpD 1.5x + 6.25% chip to non-Rock/Ground/Steel" },
+      { ja: "ひでり (晴れ): 炎技1.5倍 / 水技0.5倍", en: "Drought (Sun): Fire 1.5x / Water 0.5x" },
+      { ja: "あめふらし (雨): 水技1.5倍 / 炎技0.5倍", en: "Drizzle (Rain): Water 1.5x / Fire 0.5x" },
+      { ja: "ゆきふらし (雪): 氷タイプ防御1.5倍", en: "Snow Warning (Snow): Ice-type Def 1.5x" },
+      { ja: "天候競合: 遅い方の天候セッターが優先 (後出し)", en: "Weather conflict: slower setter's weather wins (sets last)" },
+      { ja: "チーム単位で適用: 選出に天候セッターがいれば全対面に影響", en: "Team-level: affects all matchups if weather setter in selection" },
       { ja: "Magic Guard / Overcoat は砂チップ免疫", en: "Magic Guard / Overcoat immune to sand chip" },
-      { ja: "チーム単位で適用: 選出にすなおこし持ちがいれば全対面に影響", en: "Team-level: affects all matchups if Sand Stream user in selection" },
     ],
   },
   {
@@ -128,15 +130,23 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    titleJa: "先制技によるKOレース補正",
+    titleEn: "Priority Move KO Race Override",
+    items: [
+      { ja: "しんそく (+2), バレットパンチ, アクアジェット, かげうち 等 (+1)", en: "Extreme Speed (+2), Bullet Punch, Aqua Jet, Shadow Sneak etc. (+1)" },
+      { ja: "先制技持ちは素早さ負けでも先制扱い → KOレースで有利", en: "Priority user treated as faster even if slower → KO race advantage" },
+      { ja: "先制技ダメージでKOレース計算: 先制eKoN ≤ 相手eKoN なら勝利", en: "Priority KO race: priority eKoN ≤ opponent eKoN → wins" },
+      { ja: "双方先制技持ちの場合: 優先度比較 → 同優先度なら素早さ順", en: "Both have priority: compare priority levels → speed tiebreak" },
+    ],
+  },
+  {
     titleJa: "未考慮の要素",
     titleEn: "Not Yet Modeled",
     items: [
       { ja: "ターン進行・交代読み", en: "Turn-by-turn play / prediction" },
-      { ja: "先制技の優先度 (しんそく等は通常速度比較のみ)", en: "Priority moves (Extreme Speed etc. use normal speed comparison)" },
       { ja: "状態異常 (やけど, まひ等)", en: "Status conditions (burn, paralysis etc.)" },
       { ja: "壁技 (ひかりのかべ, リフレクター)", en: "Screens (Light Screen, Reflect)" },
       { ja: "回復技 (なまける, じこさいせい等)", en: "Recovery moves (Slack Off, Recover etc.)" },
-      { ja: "砂嵐以外の天候 (晴れ/雨/雪)", en: "Weather other than Sand (Sun/Rain/Snow)" },
       { ja: "チーム内シナジー (トリックルーム等)", en: "Team synergies (Trick Room etc.)" },
     ],
   },

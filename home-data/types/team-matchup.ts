@@ -12,7 +12,10 @@ export interface DamageMatrixEntry {
   effectiveness: number;
   isContact: boolean; // true if bestMove makes contact
   chipPctToAttacker: number; // % of attacker HP lost per hit (Rough Skin/Iron Barbs: 12.5)
-  sandChipToDefender: number; // 6.25 if Sand active & defender not Rock/Ground/Steel/immune, else 0
+  weatherChipToDefender: number; // 6.25 if Sand active & defender not immune, else 0
+  priorityMaxPct: number; // max damage % from best priority move (0 if none)
+  priorityKoN: number; // KO count from best priority move (0 if none)
+  priorityKoChance: number; // KO chance for priority move (0 if none)
 }
 
 /** Full 49×49 damage matrix: matrix[attackerName][defenderName] */

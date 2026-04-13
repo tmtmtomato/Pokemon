@@ -94,15 +94,40 @@ function baseSpecies(poolName: string): string {
 const CHIP_DAMAGE_ABILITIES = new Set(["Rough Skin", "Iron Barbs"]);
 const CHIP_PCT = 12.5; // 1/8 of max HP
 
-// Sand Stream: sets permanent sandstorm
-const SAND_STREAM_ABILITY = "Sand Stream";
+// ── Weather system ──────────────────────────────────────────────────────────
+// Weather-setting abilities → Weather type
+const WEATHER_ABILITIES: Record<string, string> = {
+  "Sand Stream": "Sand",
+  "Drought": "Sun",
+  "Drizzle": "Rain",
+  "Snow Warning": "Snow",
+};
+
 const SAND_CHIP_PCT = 6.25; // 1/16 of max HP per turn
 const SAND_IMMUNE_TYPES = new Set(["Rock", "Ground", "Steel"]);
-const SAND_IMMUNE_ABILITIES = new Set(["Magic Guard", "Overcoat"]);
+const WEATHER_CHIP_IMMUNE_ABILITIES = new Set(["Magic Guard", "Overcoat"]);
 
-function isSandImmune(types: string[], ability: string): boolean {
-  if (SAND_IMMUNE_ABILITIES.has(ability)) return true;
+function isSandChipImmune(types: string[], ability: string): boolean {
+  if (WEATHER_CHIP_IMMUNE_ABILITIES.has(ability)) return true;
   return types.some((t) => SAND_IMMUNE_TYPES.has(t));
+}
+
+/** Resolve weather when two abilities conflict: slower setter wins (sets last). */
+function resolveWeather(
+  atkAbility: string, atkSpeed: number,
+  defAbility: string, defSpeed: number,
+): string | undefined {
+  const atkW = WEATHER_ABILITIES[atkAbility];
+  const defW = WEATHER_ABILITIES[defAbility];
+  if (atkW && !defW) return atkW;
+  if (!atkW && defW) return defW;
+  if (atkW && defW) {
+    // Both have weather: slower setter overwrites (sets last)
+    if (atkSpeed < defSpeed) return atkW;
+    if (defSpeed < atkSpeed) return defW;
+    return atkW; // tie: attacker's weather (arbitrary)
+  }
+  return undefined;
 }
 
 // Stealth Rock: known competitive setters present in this pool
@@ -122,12 +147,13 @@ function getSRChipPct(defenderTypes: string[]): number {
 
 /** Simulation environment: precomputed team-level lookups */
 interface SimEnv {
-  sandStreamUsers: Set<string>;    // Pool names with Sand Stream ability
-  sandImmune: Set<string>;         // Pool names immune to sand chip
-  srUsers: Set<string>;            // Pool names that can set Stealth Rock
-  srChipPct: Map<string, number>;  // Pool name → SR chip % they take (0-50)
-  poolTypes: Map<string, string[]>; // Pool name → types
-  poolAbilities: Map<string, string>; // Pool name → primary ability
+  weatherUsers: Map<string, string>;   // Pool name → weather type ("Sand"|"Sun"|"Rain"|"Snow")
+  sandChipImmune: Set<string>;         // Pool names immune to sand chip
+  srUsers: Set<string>;                // Pool names that can set Stealth Rock
+  srChipPct: Map<string, number>;      // Pool name → SR chip % they take (0-50)
+  poolTypes: Map<string, string[]>;    // Pool name → types
+  poolAbilities: Map<string, string>;  // Pool name → primary ability
+  poolSpeeds: Map<string, number>;     // Pool name → speed stat
 }
 
 /**
@@ -250,16 +276,20 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
         isMega: defBuild.isMega,
       });
 
-      // Sand Stream: if either side has it, activate sandstorm
-      const sandActive = atkBuild.ability === SAND_STREAM_ABILITY || defBuild.ability === SAND_STREAM_ABILITY;
-      const field = sandActive
-        ? new Field({ gameType: "Singles" as any, weather: "Sand" as any })
+      // Weather: resolve from both sides' abilities (slower setter wins)
+      const atkSpeed = attacker.singlesScores?.speedStat ?? 0;
+      const defSpeed = defender.singlesScores?.speedStat ?? 0;
+      const pairWeather = resolveWeather(atkBuild.ability, atkSpeed, defBuild.ability, defSpeed);
+      const field = pairWeather
+        ? new Field({ gameType: "Singles" as any, weather: pairWeather as any })
         : new Field({ gameType: "Singles" as any });
       let bestEntry: DamageMatrixEntry | null = null;
+      let bestPriorityEntry: { maxPct: number; koN: number; koChance: number } | null = null;
 
       // Compute sand chip to defender (6.25% if sand active & defender not immune)
       const defTypes = defender.types ?? [];
-      const defSandChip = sandActive && !isSandImmune(defTypes, defBuild.ability) ? SAND_CHIP_PCT : 0;
+      const defWeatherChip = (pairWeather === "Sand" && !isSandChipImmune(defTypes, defBuild.ability))
+        ? SAND_CHIP_PCT : 0;
 
       // Check if defender has a chip-on-contact ability (Rough Skin / Iron Barbs)
       const defHasChip = CHIP_DAMAGE_ABILITIES.has(defBuild.ability);
@@ -298,15 +328,30 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
               effectiveness: result.typeEffectiveness,
               isContact: contact,
               chipPctToAttacker: chipPct,
-              sandChipToDefender: defSandChip,
+              weatherChipToDefender: defWeatherChip,
+              priorityMaxPct: 0, // filled below
+              priorityKoN: 0,
+              priorityKoChance: 0,
             };
+          }
+
+          // Track best priority move separately (priority >= 1, damaging)
+          if (move.priority >= 1 && maxPct > 0 && !selfKO) {
+            if (!bestPriorityEntry || maxPct > bestPriorityEntry.maxPct) {
+              bestPriorityEntry = {
+                maxPct: round1(maxPct),
+                koN: ko.n,
+                koChance: round1(ko.chance),
+              };
+            }
           }
         } catch {
           // skip failed calcs
         }
       }
 
-      matrix[attacker.name][defender.name] = bestEntry ?? {
+      // Merge priority data into best entry
+      const entry: DamageMatrixEntry = bestEntry ?? {
         bestMove: "",
         minPct: 0,
         maxPct: 0,
@@ -315,8 +360,17 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
         effectiveness: 1,
         isContact: false,
         chipPctToAttacker: 0,
-        sandChipToDefender: defSandChip,
+        weatherChipToDefender: defWeatherChip,
+        priorityMaxPct: 0,
+        priorityKoN: 0,
+        priorityKoChance: 0,
       };
+      if (bestPriorityEntry) {
+        entry.priorityMaxPct = bestPriorityEntry.maxPct;
+        entry.priorityKoN = bestPriorityEntry.koN;
+        entry.priorityKoChance = bestPriorityEntry.koChance;
+      }
+      matrix[attacker.name][defender.name] = entry;
     }
 
     attackersDone++;
@@ -673,15 +727,43 @@ function adjustedEKoN(
   return Math.min(base, adjusted);
 }
 
+/**
+ * effectiveKoN for a priority move entry.
+ * Similar to effectiveKoN but uses priority move fields.
+ */
+function effectivePriorityKoN(entry: DamageMatrixEntry | undefined | null): number {
+  if (!entry || !entry.priorityKoN || entry.priorityMaxPct <= 0) return 99;
+  return entry.priorityKoN + (1 - (entry.priorityKoChance ?? 0));
+}
+
+/** Resolve team-level weather from selected members. Slower setter wins on conflict. */
+function resolveTeamWeather(
+  selA: string[],
+  selB: string[],
+  env: SimEnv,
+): string | undefined {
+  // Collect all weather setters across both teams
+  const setters: { name: string; weather: string; speed: number }[] = [];
+  for (const n of [...selA, ...selB]) {
+    const w = env.weatherUsers.get(n);
+    if (w) setters.push({ name: n, weather: w, speed: env.poolSpeeds.get(n) ?? 0 });
+  }
+  if (setters.length === 0) return undefined;
+  if (setters.length === 1) return setters[0].weather;
+  // Multiple setters: slowest one sets weather last → their weather wins
+  setters.sort((a, b) => a.speed - b.speed); // ascending = slowest first
+  return setters[0].weather;
+}
+
 function evaluate3v3(
   selA: string[],
   selB: string[],
   matrix: DamageMatrix,
   env: SimEnv,
 ): MatchEvaluation {
-  // Team-level weather: sand if either team has a Sand Stream user in selection
-  const sandActive = selA.some((n) => env.sandStreamUsers.has(n))
-                  || selB.some((n) => env.sandStreamUsers.has(n));
+  // Team-level weather: resolved from all weather setters in both selections
+  const activeWeather = resolveTeamWeather(selA, selB, env);
+  const sandActive = activeWeather === "Sand";
 
   // Team-level hazards: SR if team has an eligible setter
   const srFromA = canSetSR(selA, selB, matrix, env); // A sets SR → B takes chip
@@ -690,7 +772,7 @@ function evaluate3v3(
   /** Virtual chip % a defender takes (sand + SR combined). */
   function chipFor(name: string, oppHasSR: boolean): number {
     let chip = 0;
-    if (sandActive && !env.sandImmune.has(name)) chip += SAND_CHIP_PCT;
+    if (sandActive && !env.sandChipImmune.has(name)) chip += SAND_CHIP_PCT;
     if (oppHasSR) chip += env.srChipPct.get(name) ?? 0;
     return chip;
   }
@@ -909,23 +991,28 @@ function computeTeamThreatProfile(
     memberSpeeds.set(m, meta?.singlesScores?.speedStat ?? 0);
   }
 
-  // ── Sand / SR team-level effects ──
-  const teamHasSand = members.some((m) => env.sandStreamUsers.has(m));
+  // ── Weather / SR team-level effects ──
+  // Determine team-level weather: if our team has a weather setter, what weather do we bring?
+  const teamWeatherSetters = members.filter((m) => env.weatherUsers.has(m));
+  const teamWeather = teamWeatherSetters.length > 0
+    ? env.weatherUsers.get(teamWeatherSetters[0])  // first setter (arbitrary if multiple)
+    : undefined;
+  const teamHasSand = teamWeather === "Sand";
   const teamHasSR = members.some((m) => env.srUsers.has(m));
 
   /** Virtual chip % an opponent takes from our team's sand/SR. */
   function oppChipFor(oppName: string): number {
     let chip = 0;
-    if (teamHasSand && !env.sandImmune.has(oppName)) chip += SAND_CHIP_PCT;
+    if (teamHasSand && !env.sandChipImmune.has(oppName)) chip += SAND_CHIP_PCT;
     if (teamHasSR) chip += env.srChipPct.get(oppName) ?? 0;
     return chip;
   }
 
-  /** Virtual chip % a team member takes from an opponent's sand/SR.
-   *  (Opponent could also have Sand Stream.) */
-  function myChipFrom(meName: string, oppHasSand: boolean): number {
+  /** Virtual chip % a team member takes from an opponent's weather/SR.
+   *  (Opponent could have Sand Stream.) */
+  function myChipFrom(meName: string, oppWeather: string | undefined): number {
     let chip = 0;
-    if (oppHasSand && !env.sandImmune.has(meName)) chip += SAND_CHIP_PCT;
+    if (oppWeather === "Sand" && !env.sandChipImmune.has(meName)) chip += SAND_CHIP_PCT;
     // Opponent SR not modeled here (would need per-opponent SR check)
     return chip;
   }
@@ -954,7 +1041,8 @@ function computeTeamThreatProfile(
   /** Check if a member meets answer criteria vs an opponent.
    *  Uses effectiveKoN for probability-aware evaluation, adjusts for:
    *  - Contact chip damage (Rough Skin etc.)
-   *  - Sand chip & SR virtual damage (team-level effects) */
+   *  - Sand chip & SR virtual damage (team-level effects)
+   *  - Priority moves: if slower but has priority, use priority move for KO race */
   function meetsAnswerCriteria(me: string, oppName: string, oppSpeed: number): boolean {
     const meToOpp = matrix[me]?.[oppName];
     const oppToMe = matrix[oppName]?.[me];
@@ -968,13 +1056,19 @@ function computeTeamThreatProfile(
     const memberSpeed = memberSpeeds.get(me) ?? 0;
     const outspeeds = memberSpeed > oppSpeed;
 
-    // Outspeeds and guaranteed/near-guaranteed OHKO (revenge kill)
-    if (outspeeds && myEKoN <= 1.25) return true;
+    // Priority override: if slower but has a priority move, check if it wins the race
+    const hasPriority = meToOpp.priorityMaxPct > 0;
+    // Opponent's priority check
+    const oppHasPriority = oppToMe ? oppToMe.priorityMaxPct > 0 : false;
+    // Effective speed: outspeed naturally OR have priority (and opponent doesn't)
+    const effectivelyFaster = outspeeds || (hasPriority && !oppHasPriority);
 
-    // Their KO against me: adjust for opponent's sand chip to me
-    const oppAbility = env.poolAbilities.get(oppName) ?? "";
-    const oppHasSand = oppAbility === SAND_STREAM_ABILITY;
-    const meChip = myChipFrom(me, oppHasSand);
+    // Outspeeds (or priority) and guaranteed/near-guaranteed OHKO (revenge kill)
+    if (effectivelyFaster && myEKoN <= 1.25) return true;
+
+    // Their KO against me: adjust for opponent's weather chip to me
+    const oppWeather = env.weatherUsers.get(oppName);
+    const meChip = myChipFrom(me, oppWeather);
     let theirEKoNToMe = adjustedEKoN(oppToMe, meChip);
 
     // Also adjust for contact chip I take from Rough Skin etc.
@@ -990,18 +1084,27 @@ function computeTeamThreatProfile(
 
     // Survives opponent's best and wins KO race
     if (theirEKoNToMe >= 2) {
-      const weWin = outspeeds
+      const weWin = effectivelyFaster
         ? myEKoN <= theirEKoNToMe
         : myEKoN < theirEKoNToMe;
       if (weWin) return true;
+    }
+
+    // Priority fallback: if we're slower and can't win with best move,
+    // check if priority move can win the race (acts first each turn)
+    if (!outspeeds && hasPriority && !oppHasPriority && theirEKoNToMe >= 2) {
+      const prioEKoN = adjustedEKoN(
+        { ...meToOpp, maxPct: meToOpp.priorityMaxPct, koN: meToOpp.priorityKoN, koChance: meToOpp.priorityKoChance },
+        oppChip,
+      );
+      if (prioEKoN <= 2.5 && prioEKoN <= theirEKoNToMe) return true;
     }
     return false;
   }
 
   for (const opp of opponents) {
     const oppSpeed = opp.singlesScores?.speedStat ?? 0;
-    const oppAbility = env.poolAbilities.get(opp.name) ?? "";
-    const oppHasSand = oppAbility === SAND_STREAM_ABILITY;
+    const oppWeather = env.weatherUsers.get(opp.name);
 
     // Sand/SR chip opponent takes from our team
     const oppVirtualChip = oppChipFor(opp.name);
@@ -1024,13 +1127,13 @@ function computeTeamThreatProfile(
     }
 
     // Their best: which team member takes the most damage?
-    // Adjust for sand chip our member takes if opponent has Sand Stream
+    // Adjust for weather chip our member takes if opponent has a weather ability
     let theirBestEKoN = 99;
     let theirBestTarget = "";
     for (const me of members) {
       const entry = matrix[opp.name]?.[me];
       if (!entry) continue;
-      const meChip = myChipFrom(me, oppHasSand);
+      const meChip = myChipFrom(me, oppWeather);
       const eKoN = adjustedEKoN(entry, meChip);
       if (eKoN < theirBestEKoN) {
         theirBestEKoN = eKoN;
@@ -1338,12 +1441,13 @@ function main() {
   // ─── Phase 2b: Build simulation environment (sand/SR lookups) ────────
 
   const simEnv: SimEnv = {
-    sandStreamUsers: new Set<string>(),
-    sandImmune: new Set<string>(),
+    weatherUsers: new Map<string, string>(),
+    sandChipImmune: new Set<string>(),
     srUsers: new Set<string>(),
     srChipPct: new Map<string, number>(),
     poolTypes: new Map<string, string[]>(),
     poolAbilities: new Map<string, string>(),
+    poolSpeeds: new Map<string, number>(),
   };
 
   for (const p of expandedPool) {
@@ -1354,12 +1458,15 @@ function main() {
 
     simEnv.poolTypes.set(p.name, types);
     simEnv.poolAbilities.set(p.name, primaryBuild.ability);
+    simEnv.poolSpeeds.set(p.name, p.singlesScores?.speedStat ?? 0);
 
-    if (primaryBuild.ability === SAND_STREAM_ABILITY) {
-      simEnv.sandStreamUsers.add(p.name);
+    // Weather ability detection
+    const weather = WEATHER_ABILITIES[primaryBuild.ability];
+    if (weather) {
+      simEnv.weatherUsers.set(p.name, weather);
     }
-    if (isSandImmune(types, primaryBuild.ability)) {
-      simEnv.sandImmune.add(p.name);
+    if (isSandChipImmune(types, primaryBuild.ability)) {
+      simEnv.sandChipImmune.add(p.name);
     }
     // SR user: base species must be in known list (mega entries also count via base name)
     if (STEALTH_ROCK_USERS.has(speciesName)) {
@@ -1369,7 +1476,15 @@ function main() {
     simEnv.srChipPct.set(p.name, getSRChipPct(types));
   }
 
-  console.log(`  Sand Stream users: ${[...simEnv.sandStreamUsers].join(", ") || "none"}`);
+  // Log weather setters by type
+  const weatherByType = new Map<string, string[]>();
+  for (const [name, w] of simEnv.weatherUsers) {
+    if (!weatherByType.has(w)) weatherByType.set(w, []);
+    weatherByType.get(w)!.push(name);
+  }
+  for (const [w, names] of weatherByType) {
+    console.log(`  ${w} setters: ${names.join(", ")}`);
+  }
   console.log(`  SR setters: ${[...simEnv.srUsers].join(", ") || "none"}`);
 
   // ─── Phase 3: Generate teams (with item exclusivity) ──────────────────
