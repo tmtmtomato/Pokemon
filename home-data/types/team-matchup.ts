@@ -16,6 +16,7 @@ export interface DamageMatrixEntry {
   priorityMaxPct: number; // max damage % from best priority move (0 if none)
   priorityKoN: number; // KO count from best priority move (0 if none)
   priorityKoChance: number; // KO chance for priority move (0 if none)
+  recoilPctToSelf: number; // recoil damage per use of bestMove, as % of attacker's HP (0 if no recoil)
 }
 
 /** Full 49×49 damage matrix: matrix[attackerName][defenderName] */

@@ -80,6 +80,15 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    titleJa: "反動技ダメージ",
+    titleEn: "Recoil Move Self-Damage",
+    items: [
+      { ja: "反動技: 与ダメージの一部が自分に返る (ウェーブタックル/フレアドライブ 33%, もろはのずつき 50%)", en: "Recoil moves: fraction of damage dealt returns to user (Wave Crash/Flare Blitz 33%, Head Smash 50%)" },
+      { ja: "自分HP%で記録: recoilPctToSelf = 与ダメ% × (相手HP/自分HP) × 反動率", en: "Stored as attacker HP%: recoilPctToSelf = dmgPct × (defHP/atkHP) × recoilRate" },
+      { ja: "KOレースに反映: 反動+接触チップの累積で実効HP低下", en: "Applied in KO race: cumulative recoil + contact chip reduces effective HP" },
+    ],
+  },
+  {
     titleJa: "ステルスロック (仮想ダメージ)",
     titleEn: "Stealth Rock (Virtual Damage)",
     items: [
@@ -113,7 +122,7 @@ const SECTIONS: Section[] = [
     titleJa: "脅威分析",
     titleEn: "Threat Analysis",
     items: [
-      { ja: "回答判定: eKoN≤2.5 かつ KOレース勝利 (速度・チップ込み)", en: "Answer criteria: eKoN≤2.5 and wins KO race (speed + chip aware)" },
+      { ja: "回答判定: eKoN≤2.5 かつ KOレース勝利 (速度・反動・チップ込み)", en: "Answer criteria: eKoN≤2.5 and wins KO race (speed + recoil + chip aware)" },
       { ja: "脅威レベル: LOW / MEDIUM / HIGH / CRITICAL", en: "Threat levels: LOW / MEDIUM / HIGH / CRITICAL" },
       { ja: "使用率加重回答率: 人気ポケモンの回答漏れを重罰", en: "Usage-weighted answer rate: penalizes unanswered popular Pokemon" },
       { ja: "メガ競合ペナルティ: 2体以上のメガが排他的回答を持つ場合に減点", en: "Mega contention penalty: deducted when 2+ megas have exclusive answers" },
@@ -133,10 +142,12 @@ const SECTIONS: Section[] = [
     titleJa: "先制技によるKOレース補正",
     titleEn: "Priority Move KO Race Override",
     items: [
-      { ja: "しんそく (+2), バレットパンチ, アクアジェット, かげうち 等 (+1)", en: "Extreme Speed (+2), Bullet Punch, Aqua Jet, Shadow Sneak etc. (+1)" },
-      { ja: "先制技持ちは素早さ負けでも先制扱い → KOレースで有利", en: "Priority user treated as faster even if slower → KO race advantage" },
-      { ja: "先制技ダメージでKOレース計算: 先制eKoN ≤ 相手eKoN なら勝利", en: "Priority KO race: priority eKoN ≤ opponent eKoN → wins" },
-      { ja: "双方先制技持ちの場合: 優先度比較 → 同優先度なら素早さ順", en: "Both have priority: compare priority levels → speed tiebreak" },
+      { ja: "しんそく (+2), バレットパンチ, アクアジェット, ジェットパンチ, かげうち 等 (+1)", en: "Extreme Speed (+2), Bullet Punch, Aqua Jet, Jet Punch, Shadow Sneak etc. (+1)" },
+      { ja: "メイン技は先制扱いにならない (例: ウェーブタックルは通常速度で判定)", en: "Main move does NOT get priority (e.g., Wave Crash still uses normal speed)" },
+      { ja: "合算2ターンKO: T1メイン技 + T2先制技 ≥ 100% → T1を耐えれば勝ち", en: "Combined 2-turn KO: T1 main move + T2 priority ≥ 100% → win if survive T1" },
+      { ja: "T1生存判定: 自HP - 被ダメ - 反動 - 接触チップ - 天候チップ > 0", en: "T1 survival: myHP - oppDmg - recoil - contactChip - weatherChip > 0" },
+      { ja: "先制技のみKOレース: 先制eKoN ≤ 相手eKoN なら毎ターン先手で勝利", en: "Priority-only race: priority eKoN ≤ opponent eKoN → acts first each turn, wins" },
+      { ja: "双方先制技持ちの場合: 先制技の優位なし → 通常速度で判定", en: "Both have priority: no priority advantage → falls back to normal speed" },
     ],
   },
   {

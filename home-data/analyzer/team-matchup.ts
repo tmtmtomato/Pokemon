@@ -285,6 +285,7 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
         : new Field({ gameType: "Singles" as any });
       let bestEntry: DamageMatrixEntry | null = null;
       let bestPriorityEntry: { maxPct: number; koN: number; koChance: number } | null = null;
+      let bestMoveRecoilRatio = 0; // recoil[0]/recoil[1] for the current best move
 
       // Compute sand chip to defender (6.25% if sand active & defender not immune)
       const defTypes = defender.types ?? [];
@@ -332,7 +333,9 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
               priorityMaxPct: 0, // filled below
               priorityKoN: 0,
               priorityKoChance: 0,
+              recoilPctToSelf: 0, // filled below
             };
+            bestMoveRecoilRatio = move.recoil ? move.recoil[0] / move.recoil[1] : 0;
           }
 
           // Track best priority move separately (priority >= 1, damaging)
@@ -364,11 +367,18 @@ function buildDamageMatrix(pool: MetaPokemon[]): {
         priorityMaxPct: 0,
         priorityKoN: 0,
         priorityKoChance: 0,
+        recoilPctToSelf: 0,
       };
       if (bestPriorityEntry) {
         entry.priorityMaxPct = bestPriorityEntry.maxPct;
         entry.priorityKoN = bestPriorityEntry.koN;
         entry.priorityKoChance = bestPriorityEntry.koChance;
+      }
+      // Compute recoil as % of attacker's HP: maxPct × (defHP / atkHP) × recoilRatio
+      if (bestMoveRecoilRatio > 0 && entry.maxPct > 0) {
+        const atkHP = atkPokemon.maxHP();
+        const defHP = defPokemon.maxHP();
+        entry.recoilPctToSelf = round1(entry.maxPct * (defHP / atkHP) * bestMoveRecoilRatio);
       }
       matrix[attacker.name][defender.name] = entry;
     }
@@ -1040,9 +1050,15 @@ function computeTeamThreatProfile(
 
   /** Check if a member meets answer criteria vs an opponent.
    *  Uses effectiveKoN for probability-aware evaluation, adjusts for:
+   *  - Recoil damage (Wave Crash, Flare Blitz etc.) reducing attacker's effective HP
    *  - Contact chip damage (Rough Skin etc.)
    *  - Sand chip & SR virtual damage (team-level effects)
-   *  - Priority moves: if slower but has priority, use priority move for KO race */
+   *  - Priority moves: combined 2-turn KO (main move + priority finisher)
+   *
+   *  Three paths:
+   *  A) Naturally faster → OHKO check + KO race
+   *  B) Slower with priority (opp has none) → combined 2-turn KO + priority-only race
+   *  C) Slower without priority advantage → strict KO race */
   function meetsAnswerCriteria(me: string, oppName: string, oppSpeed: number): boolean {
     const meToOpp = matrix[me]?.[oppName];
     const oppToMe = matrix[oppName]?.[me];
@@ -1051,54 +1067,73 @@ function computeTeamThreatProfile(
     // My KO against opponent: adjust for sand + SR chip opponent takes
     const oppChip = oppChipFor(oppName);
     const myEKoN = adjustedEKoN(meToOpp, oppChip);
-    if (myEKoN > 2.5) return false; // can't reliably KO in ≤2
 
     const memberSpeed = memberSpeeds.get(me) ?? 0;
     const outspeeds = memberSpeed > oppSpeed;
-
-    // Priority override: if slower but has a priority move, check if it wins the race
     const hasPriority = meToOpp.priorityMaxPct > 0;
-    // Opponent's priority check
     const oppHasPriority = oppToMe ? oppToMe.priorityMaxPct > 0 : false;
-    // Effective speed: outspeed naturally OR have priority (and opponent doesn't)
-    const effectivelyFaster = outspeeds || (hasPriority && !oppHasPriority);
 
-    // Outspeeds (or priority) and guaranteed/near-guaranteed OHKO (revenge kill)
-    if (effectivelyFaster && myEKoN <= 1.25) return true;
+    // Can I reliably KO in ≤2 hits with best move?
+    // OR can combined 2-turn pattern (main + priority finisher) reach 100%?
+    const canCombinedKO = hasPriority && !oppHasPriority &&
+      (meToOpp.maxPct + meToOpp.priorityMaxPct + oppChip >= 100);
+    if (myEKoN > 2.5 && !canCombinedKO) return false; // no KO path available
 
     // Their KO against me: adjust for opponent's weather chip to me
     const oppWeather = env.weatherUsers.get(oppName);
     const meChip = myChipFrom(me, oppWeather);
     let theirEKoNToMe = adjustedEKoN(oppToMe, meChip);
 
-    // Also adjust for contact chip I take from Rough Skin etc.
-    if (meToOpp.chipPctToAttacker > 0 && oppToMe) {
+    // Adjust my effective HP for self-damage per hit:
+    // recoil (e.g., Wave Crash 33%) + contact chip (Rough Skin 12.5%)
+    const selfDmgPerHit = meToOpp.recoilPctToSelf + meToOpp.chipPctToAttacker;
+    if (selfDmgPerHit > 0 && oppToMe && oppToMe.maxPct > 0) {
       const hitsNeeded = Math.ceil(myEKoN);
-      const totalContactChip = hitsNeeded * meToOpp.chipPctToAttacker;
-      const myEffectiveHP = 100 - totalContactChip - meChip;
-      if (myEffectiveHP > 0 && oppToMe.maxPct > 0) {
-        const adjustedKoN = Math.ceil(myEffectiveHP / oppToMe.maxPct);
-        theirEKoNToMe = Math.min(theirEKoNToMe, adjustedKoN);
+      const totalSelfDmg = hitsNeeded * selfDmgPerHit;
+      const myEffectiveHP = 100 - totalSelfDmg - meChip;
+      if (myEffectiveHP > 0) {
+        const adjusted = Math.ceil(myEffectiveHP / oppToMe.maxPct);
+        theirEKoNToMe = Math.min(theirEKoNToMe, adjusted);
+      } else {
+        theirEKoNToMe = 0; // I KO myself from cumulative self-damage
       }
     }
 
-    // Survives opponent's best and wins KO race
-    if (theirEKoNToMe >= 2) {
-      const weWin = effectivelyFaster
-        ? myEKoN <= theirEKoNToMe
-        : myEKoN < theirEKoNToMe;
-      if (weWin) return true;
+    // === Path A: Naturally faster ===
+    if (outspeeds) {
+      // OHKO check (I attack first)
+      if (myEKoN <= 1.25) return true;
+      // KO race (I attack first each turn → equal KO count wins)
+      if (theirEKoNToMe >= 2 && myEKoN <= theirEKoNToMe) return true;
     }
 
-    // Priority fallback: if we're slower and can't win with best move,
-    // check if priority move can win the race (acts first each turn)
-    if (!outspeeds && hasPriority && !oppHasPriority && theirEKoNToMe >= 2) {
-      const prioEKoN = adjustedEKoN(
-        { ...meToOpp, maxPct: meToOpp.priorityMaxPct, koN: meToOpp.priorityKoN, koChance: meToOpp.priorityKoChance },
-        oppChip,
-      );
-      if (prioEKoN <= 2.5 && prioEKoN <= theirEKoNToMe) return true;
+    // === Path B: Slower, have priority, opponent doesn't ===
+    if (!outspeeds && hasPriority && !oppHasPriority) {
+      // B1: Combined 2-turn KO (main move T1 + priority finisher T2)
+      //   Turn 1: opponent hits me → I hit with main move (slower)
+      //   Turn 2: I use priority move FIRST → combined ≥ 100% → KO before opp's T2
+      if (canCombinedKO) {
+        const oppDmgToMe = oppToMe?.maxPct ?? 0;
+        const recoilFromMainMove = meToOpp.recoilPctToSelf;
+        const contactChipFromMainMove = meToOpp.chipPctToAttacker;
+        const myHPAfterTurn1 = 100 - oppDmgToMe - recoilFromMainMove - contactChipFromMainMove - meChip;
+        if (myHPAfterTurn1 > 0) return true;
+      }
+
+      // B2: Priority-only KO race (use priority move each turn, goes first each turn)
+      if (theirEKoNToMe >= 2) {
+        const prioEKoN = adjustedEKoN(
+          { ...meToOpp, maxPct: meToOpp.priorityMaxPct, koN: meToOpp.priorityKoN, koChance: meToOpp.priorityKoChance },
+          oppChip,
+        );
+        if (prioEKoN <= 2.5 && prioEKoN <= theirEKoNToMe) return true;
+      }
     }
+
+    // === Path C: Slower (no priority advantage) ===
+    // Normal KO race: must be strictly faster in KO count (I go second each turn)
+    if (!outspeeds && theirEKoNToMe >= 2 && myEKoN < theirEKoNToMe) return true;
+
     return false;
   }
 
