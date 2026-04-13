@@ -68,6 +68,11 @@ const MIN_MEMBER_ROLE_SCORE = 25;
 const MAX_TEAM_ATTEMPTS = 200;
 const MAX_VALIDATION_RETRIES = 50_000;
 
+// Selection diversity: penalize teams with dead-weight members in ranking.
+// Dead member = selected in <5% of games. Penalty: ×0.92 per dead member.
+const DEAD_SEL_THRESHOLD = 0.05; // 5% selection rate
+const DEAD_MEMBER_PENALTY = 0.92; // multiplicative per dead member
+
 // Self-KO moves (Explosion / Self-Destruct): user faints → 1:1 trade → 50% contribution
 const SELF_KO_MOVES = new Set(["Explosion", "Self-Destruct"]);
 const SELF_KO_PENALTY = 0.5;
@@ -1611,7 +1616,7 @@ function main() {
     const selMap = teamSelections.get(ti)!;
     const patterns: SelectionPattern[] = [...selMap.entries()]
       .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, 3)
+      .slice(0, 5)
       .map(([key, val]) => ({
         members: key.split("+"),
         frequency: val.count,
@@ -1620,6 +1625,29 @@ function main() {
 
     // Compute threat profile for this team vs entire pool
     const threatProfile = computeTeamThreatProfile(team.members, expandedPool, matrix, simEnv);
+
+    // Per-member selection rates from ALL selection patterns (not just top 3)
+    const memberCounts = new Map<string, number>();
+    const memberWins = new Map<string, number>();
+    team.members.forEach(m => { memberCounts.set(m, 0); memberWins.set(m, 0); });
+    for (const [key, val] of selMap.entries()) {
+      for (const name of key.split("+")) {
+        memberCounts.set(name, (memberCounts.get(name) ?? 0) + val.count);
+        memberWins.set(name, (memberWins.get(name) ?? 0) + val.wins);
+      }
+    }
+    const memberSelectionRates = team.members.map(m => {
+      const count = memberCounts.get(m) ?? 0;
+      const wins = memberWins.get(m) ?? 0;
+      return {
+        name: m,
+        selectionRate: totalGames > 0 ? round1((count / totalGames) * 100) / 100 : 0,
+        winRateWhenSelected: count > 0 ? round1((wins / count) * 100) / 100 : 0,
+      };
+    });
+    const deadMemberCount = memberSelectionRates.filter(
+      r => r.selectionRate < DEAD_SEL_THRESHOLD,
+    ).length;
 
     return {
       rank: 0,
@@ -1631,6 +1659,8 @@ function main() {
       draws: teamDraws[ti],
       avgScore: totalGames > 0 ? round1((teamScoreSum[ti] / totalGames) * 100) / 100 : 0,
       commonSelections: patterns,
+      memberSelectionRates,
+      deadMemberCount,
       typeProfile: {
         offensiveTypes: getTeamOffensiveTypes(team.members, expandedPool),
         defensiveWeaks: getTeamDefensiveWeaks(team.members),
@@ -1639,11 +1669,15 @@ function main() {
     };
   });
 
-  // Sort by combined score: winRate (60%) + dominanceScore (40%)
-  // This promotes teams with high kill pressure AND low threats
+  // ── Selection diversity penalty ─────────────────────────────────────
+  // Teams with "dead" members (selected <5% of games) are penalized in ranking.
+  // Real competitive teams need all 6 members to contribute across matchups.
+  // Penalty: ×0.92 per dead member (1 dead = ×0.92, 2 dead = ×0.85, 3 = ×0.78).
   rankedTeams.sort((a, b) => {
-    const scoreA = 0.6 * (a.winRate * 100) + 0.4 * (a.threatProfile?.dominanceScore ?? 0);
-    const scoreB = 0.6 * (b.winRate * 100) + 0.4 * (b.threatProfile?.dominanceScore ?? 0);
+    const penaltyA = Math.pow(DEAD_MEMBER_PENALTY, a.deadMemberCount);
+    const penaltyB = Math.pow(DEAD_MEMBER_PENALTY, b.deadMemberCount);
+    const scoreA = (0.6 * (a.winRate * 100) + 0.4 * (a.threatProfile?.dominanceScore ?? 0)) * penaltyA;
+    const scoreB = (0.6 * (b.winRate * 100) + 0.4 * (b.threatProfile?.dominanceScore ?? 0)) * penaltyB;
     return scoreB - scoreA || b.winRate - a.winRate;
   });
   const topTeams = rankedTeams.slice(0, TOP_N_TEAMS);
@@ -1653,17 +1687,22 @@ function main() {
   console.log(`\n=== Top 10 Teams (殺意×脅威耐性) ===`);
   for (const t of topTeams.slice(0, 10)) {
     const tp = t.threatProfile;
-    const combined = tp ? (0.6 * (t.winRate * 100) + 0.4 * tp.dominanceScore).toFixed(1) : "?";
+    const penalty = Math.pow(DEAD_MEMBER_PENALTY, t.deadMemberCount);
+    const raw = tp ? (0.6 * (t.winRate * 100) + 0.4 * tp.dominanceScore) : 0;
+    const combined = (raw * penalty).toFixed(1);
     console.log(
-      `  #${t.rank} Combined=${combined} WR=${(t.winRate * 100).toFixed(1)}% ` +
+      `  #${t.rank} Score=${combined} WR=${(t.winRate * 100).toFixed(1)}% ` +
       `Kill=${tp?.killPressure ?? "?"}  Safe=${tp?.threatResistance ?? "?"} ` +
       `Ans=${tp?.answerRate ?? "?"}% ` +
-      `Unans=${tp?.unansweredCount ?? "?"} Gaps=${tp?.criticalGaps ?? 0} ` +
-      `Crit=${tp?.criticalThreats ?? 0} High=${tp?.highThreats ?? 0}`,
+      `Dead=${t.deadMemberCount}` +
+      (t.deadMemberCount > 0 ? ` (×${penalty.toFixed(2)})` : "") +
+      ` Gaps=${tp?.criticalGaps ?? 0}`,
     );
-    console.log(
-      `       [${t.members.join(", ")}]`,
-    );
+    // Show member selection rates
+    const selStr = t.memberSelectionRates
+      .map(r => `${r.name.split("-")[0]}:${(r.selectionRate * 100).toFixed(0)}%`)
+      .join(" ");
+    console.log(`       [${selStr}]`);
   }
 
   // ─── Phase 6: Pokemon stats + Output ─────────────────────────────────

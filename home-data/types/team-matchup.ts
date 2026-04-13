@@ -101,6 +101,14 @@ export interface ThreatProfile {
 }
 
 /** A ranked team in the final output */
+export interface MemberSelectionRate {
+  name: string;
+  /** Fraction of total games this member was selected (0-1) */
+  selectionRate: number;
+  /** Win rate when this member was selected (0-1) */
+  winRateWhenSelected: number;
+}
+
 export interface RankedTeam {
   rank: number;
   teamId: string;
@@ -111,6 +119,10 @@ export interface RankedTeam {
   draws: number;
   avgScore: number;
   commonSelections: SelectionPattern[];
+  /** Per-member selection rates computed from ALL selection patterns */
+  memberSelectionRates: MemberSelectionRate[];
+  /** Number of dead-weight members (selected <5% of games) */
+  deadMemberCount: number;
   typeProfile: {
     offensiveTypes: string[];
     defensiveWeaks: string[];

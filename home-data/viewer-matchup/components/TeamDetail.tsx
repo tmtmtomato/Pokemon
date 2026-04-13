@@ -363,6 +363,46 @@ export function TeamDetail({
         </div>
       </div>
 
+      {/* ── Section 2b: Member Selection Rates ── */}
+      {team.memberSelectionRates && team.memberSelectionRates.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold text-gray-400 mb-2">
+            {lang === "ja" ? "メンバー別選出率" : "Member Selection Rates"}
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+            {team.memberSelectionRates.map((r) => {
+              const selPct = r.selectionRate * 100;
+              const wrPct = r.winRateWhenSelected * 100;
+              const isLow = selPct < 10;
+              return (
+                <div
+                  key={r.name}
+                  className={`rounded px-2 py-1.5 text-xs ${isLow ? "bg-yellow-900/30 border border-yellow-800/50" : "bg-gray-800/50"}`}
+                >
+                  <div className="text-gray-200 font-medium truncate">
+                    {localizePokemon(r.name, lang)}
+                  </div>
+                  <div className="flex justify-between text-[11px] mt-0.5">
+                    <span className={isLow ? "text-yellow-400" : "text-gray-400"}>
+                      {lang === "ja" ? "選出" : "Sel"}: {selPct.toFixed(0)}%
+                    </span>
+                    <span className="text-gray-500">
+                      {lang === "ja" ? "勝率" : "WR"}: {selPct > 0 ? wrPct.toFixed(0) + "%" : "-"}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1 w-full rounded-full bg-gray-700">
+                    <div
+                      className={`h-full rounded-full ${isLow ? "bg-yellow-500" : "bg-emerald-500"}`}
+                      style={{ width: `${Math.min(selPct, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Section 3: Selection Patterns ── */}
       {team.commonSelections.length > 0 && (
         <div>
