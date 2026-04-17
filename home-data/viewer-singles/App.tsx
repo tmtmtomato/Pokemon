@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import singlesJson from "../storage/analysis/2026-04-10-singles.json";
+import singlesJson from "../storage/analysis/_latest-singles.json";
 import type { SinglesRanking, RankedPokemon } from "../types/singles-ranking";
 import { useLang } from "../viewer/LanguageContext";
 import { localizePokemon } from "../viewer/i18n";

@@ -241,6 +241,21 @@ function buildDictionary({ showdownDex, homeDex, overrides }) {
     }
   }
 
+  // Auto-generate JA names for defensive variant suffixes (-HB, -HD).
+  // If "Corviknight" → "アーマーガア" exists, auto-add:
+  //   "Corviknight-HB" → "アーマーガア(HB)"
+  //   "Corviknight-HD" → "アーマーガア(HD)"
+  // Explicit overrides take precedence.
+  for (const suffix of ["-HB", "-HD"]) {
+    for (const [name, ja] of Object.entries(out)) {
+      if (name.endsWith(suffix)) continue; // already a variant
+      const variantName = name + suffix;
+      if (!out[variantName]) {
+        out[variantName] = `${ja}(${suffix.slice(1)})`;
+      }
+    }
+  }
+
   return { dict: out, stats };
 }
 

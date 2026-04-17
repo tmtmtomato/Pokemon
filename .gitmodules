@@ -1,0 +1,3 @@
+[submodule "pkdx"]
+	path = pkdx
+	url = https://github.com/pkdxtools/pkdx.git

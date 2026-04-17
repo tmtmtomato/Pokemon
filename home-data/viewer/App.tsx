@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { MetaSnapshot } from "../types/analytics";
-import metaJson from "../storage/analysis/2026-04-08-meta.json";
+import metaJson from "../storage/analysis/_latest-meta.json";
 import { PokemonDetail } from "./components/PokemonDetail";
 import { PokemonList } from "./components/PokemonList";
 import { Toolbar } from "./components/Toolbar";

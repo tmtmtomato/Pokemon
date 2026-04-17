@@ -17,32 +17,57 @@ interface SelectionResult {
   roles: Role[];
 }
 
+// ── Speed-weighted matchup value (mirrors team-matchup-core.ts ADR-002) ──
+
+function effectiveKoN(entry: { koN: number; koChance?: number } | undefined | null): number {
+  if (!entry || !entry.koN) return 99;
+  return entry.koN + (1 - (entry.koChance ?? 0));
+}
+
+function matchupValueLocal(
+  me: string, opp: string,
+  matrix: DamageMatrix, poolSpeeds: Map<string, number>,
+): number {
+  const entry = matrix[me]?.[opp];
+  if (!entry) return 0;
+  const eKoN = effectiveKoN(entry);
+  if (entry.priorityKoN === 1 && (entry.priorityKoChance ?? 0) >= 0.5) return 2.5;
+  if (eKoN > 2.5) return 0;
+  const mySpd = poolSpeeds.get(me) ?? 0;
+  const oppSpd = poolSpeeds.get(opp) ?? 0;
+  const isOHKO = eKoN <= 1.25;
+  if (isOHKO) {
+    if (mySpd > oppSpd) return 2.5;
+    if (mySpd === oppSpd) return 1.9;
+    return 1.3;
+  }
+  if (mySpd > oppSpd) return 1.0;
+  if (mySpd === oppSpd) return 0.65;
+  return 0.3;
+}
+
+const SECONDARY_THRESHOLD = 0.4;
+const SECONDARY_COVERAGE_NEEDED = 5;
+
 /**
  * Selection algorithm: given our 6-member team and the opponent's 6,
  * pick the best 3 with assigned roles (ace / secondary / complement).
- * Enforces mega exclusivity: max 1 mega per selection.
+ * Uses speed-weighted matchupValue (ADR-002) for attacker scoring.
  */
 function selectTeam(
   myTeam: string[],
   oppTeam: string[],
   matrix: DamageMatrix,
   megaCapable: Set<string>,
+  poolSpeeds: Map<string, number>,
 ): SelectionResult {
-  // Score each member as attacker
+  // ADR-002: attackerScore = average matchupValue
   const scores = myTeam.map((me) => {
-    let kills = 0;
-    let totalDmg = 0;
+    let totalMV = 0;
     for (const opp of oppTeam) {
-      const entry = matrix[me]?.[opp];
-      if (!entry) continue;
-      if (entry.koN >= 1 && entry.koN <= 2 && entry.koChance >= 0.5) kills++;
-      totalDmg += entry.maxPct;
+      totalMV += matchupValueLocal(me, opp, matrix, poolSpeeds);
     }
-    return {
-      name: me,
-      score: 0.6 * (kills / 6) + 0.4 * (totalDmg / 600),
-      kills,
-    };
+    return { name: me, score: totalMV / oppTeam.length };
   });
   scores.sort((a, b) => b.score - a.score);
 
@@ -52,52 +77,50 @@ function selectTeam(
   // Secondary?
   for (const cand of scores.slice(1)) {
     if (selected.length >= 2) break;
-    if (cand.score < 0.3) break;
-    // Mega constraint: max 1 mega in selection
+    if (cand.score < SECONDARY_THRESHOLD) break;
     const hasMega = selected.some((s) => megaCapable.has(s));
     if (hasMega && megaCapable.has(cand.name)) continue;
-    selected.push(cand.name);
-    roles.push("secondary");
-    break;
+
+    // Coverage check
+    const coveredByAce = new Set<string>();
+    const coveredByCand = new Set<string>();
+    for (const opp of oppTeam) {
+      if (effectiveKoN(matrix[scores[0].name]?.[opp]) <= 2.5) coveredByAce.add(opp);
+      if (effectiveKoN(matrix[cand.name]?.[opp]) <= 2.5) coveredByCand.add(opp);
+    }
+    const combined = new Set([...coveredByAce, ...coveredByCand]);
+    if (combined.size >= SECONDARY_COVERAGE_NEEDED) {
+      selected.push(cand.name);
+      roles.push("secondary");
+      break;
+    }
   }
 
   // Fill complement
+  const selectedSet = new Set(selected);
   while (selected.length < 3) {
     let best = "";
     let bestScore = -1;
     for (const me of myTeam) {
-      if (selected.includes(me)) continue;
-      // Mega constraint
+      if (selectedSet.has(me)) continue;
       const hasMega = selected.some((s) => megaCapable.has(s));
       if (hasMega && megaCapable.has(me)) continue;
 
       let defVal = 0;
       let offVal = 0;
       for (const opp of oppTeam) {
-        // Defense: can tank threats to our selected members
         const isThreat = selected.some((s) => {
-          const e = matrix[opp]?.[s];
-          return e && e.koN === 1 && e.koChance >= 0.5;
+          return effectiveKoN(matrix[opp]?.[s]) <= 1.5;
         });
         if (isThreat) {
-          const canTank = !(
-            matrix[opp]?.[me]?.koN === 1 &&
-            matrix[opp]?.[me]?.koChance >= 0.5
-          );
+          const canTank = effectiveKoN(matrix[opp]?.[me]) > 1.5;
           const canHit = (matrix[me]?.[opp]?.maxPct ?? 0) >= 30;
           if (canTank && canHit) defVal++;
         }
-        // Offense: cover opponents not yet covered by selected
         const uncovered = !selected.some((s) => {
-          const e = matrix[s]?.[opp];
-          return e && e.koN >= 1 && e.koN <= 2 && e.koChance >= 0.5;
+          return effectiveKoN(matrix[s]?.[opp]) <= 2.5;
         });
-        if (
-          uncovered &&
-          matrix[me]?.[opp]?.koN &&
-          matrix[me][opp].koN <= 2 &&
-          matrix[me][opp].koChance >= 0.5
-        ) {
+        if (uncovered && effectiveKoN(matrix[me]?.[opp]) <= 2.5) {
           offVal++;
         }
       }
@@ -107,8 +130,19 @@ function selectTeam(
         best = me;
       }
     }
-    if (!best) best = myTeam.find((m) => !selected.includes(m))!;
+    if (!best) {
+      for (const cand of scores) {
+        if (!selectedSet.has(cand.name)) {
+          const hasMega = selected.some((s) => megaCapable.has(s));
+          if (hasMega && megaCapable.has(cand.name)) continue;
+          best = cand.name;
+          break;
+        }
+      }
+    }
+    if (!best) best = myTeam.find((m) => !selectedSet.has(m))!;
     selected.push(best);
+    selectedSet.add(best);
     roles.push("complement");
   }
 
@@ -155,6 +189,12 @@ export function SelectionSimulator({
     [pool],
   );
 
+  // Build poolSpeeds map from pool data (ADR-002)
+  const poolSpeeds = useMemo(
+    () => new Map(pool.filter((p) => p.speedStat != null).map((p) => [p.name, p.speedStat!])),
+    [pool],
+  );
+
   // Sort pool alphabetically (EN) or in gojuon order (JA) for the dropdowns
   const sortedPool = useMemo(
     () => [...pool].sort((a, b) => comparePokemonName(a.name, b.name, lang)),
@@ -170,8 +210,8 @@ export function SelectionSimulator({
   // Run selection algorithm when all 6 are chosen
   const result: SelectionResult | null = useMemo(() => {
     if (!allFilled) return null;
-    return selectTeam(myTeam, oppTeam, matrix, megaCapable);
-  }, [myTeam, oppTeam, matrix, allFilled, megaCapable]);
+    return selectTeam(myTeam, oppTeam, matrix, megaCapable, poolSpeeds);
+  }, [myTeam, oppTeam, matrix, allFilled, megaCapable, poolSpeeds]);
 
   function handleSlotChange(index: number, value: string) {
     setOppTeam((prev) => {

@@ -122,5 +122,11 @@
   "Kommo": "ジャラランガ",
   "Ting": "ディンルー",
   "Greninja-*": "ゲッコウガ",
-  "Furfrou-Debutante": "トリミアン(レディ)"
+  "Furfrou-Debutante": "トリミアン(レディ)",
+
+  "_defensive_variants": "Synthetic builds from team-matchup pipeline — HB=物理受け, HD=特殊受け",
+  "Garchomp-HB": "ガブリアス(HB)",
+  "Garchomp-HD": "ガブリアス(HD)",
+  "Mimikyu-HB": "ミミッキュ(HB)",
+  "Mimikyu-HD": "ミミッキュ(HD)"
 }

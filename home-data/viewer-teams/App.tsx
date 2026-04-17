@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { TeamAnalysis } from "../types/team-analysis";
-import teamsJson from "../storage/analysis/2026-04-10-teams.json";
+import teamsJson from "../storage/analysis/_latest-teams.json";
 import { TeamsToolbar, type Tab } from "./components/TeamsToolbar";
 import { TeamList, type TeamSort } from "./components/TeamList";
 import { TeamDetail } from "./components/TeamDetail";

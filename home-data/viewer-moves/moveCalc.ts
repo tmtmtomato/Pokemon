@@ -4,6 +4,17 @@
  */
 import { calculate, Pokemon, Move, Field, getEffectiveness } from "../../src/index";
 import type { PoolMember, DamageMatrix } from "../types/team-matchup";
+import { CHARGE_TURN_MOVES, CHARGE_EXEMPT_ABILITIES, RECHARGE_MOVES, baseSpecies }
+  from "../analyzer/team-matchup-core";
+
+// ─── Self-damage & debuff move constants ──────────────────
+// Moves that cost 50% max HP (fixed, not damage-proportional recoil)
+const HP_COST_50_MOVES = new Set(["Steel Beam"]);
+// Moves that drop the user's attacking stat by 2 stages after use.
+// Their 2nd hit deals ~50% damage, making sustained offense much weaker.
+const SELF_DEBUFF_MOVES = new Set([
+  "Draco Meteor", "Leaf Storm", "Overheat", "Fleur Cannon", "Psycho Boost",
+]);
 
 export interface MoveDamageResult {
   moveName: string;
@@ -28,8 +39,10 @@ export interface MoveMatrixData {
 }
 
 function createPokemon(member: PoolMember, moves?: string[]): Pokemon {
+  // Pool names use suffixes (-Mega, -HB, -HD) that the Pokemon class doesn't know.
+  // Resolve to the base species name that getSpecies() can find.
   return new Pokemon({
-    name: member.name,
+    name: baseSpecies(member.name),
     nature: member.nature as any,
     sp: member.sp,
     ability: member.ability,
@@ -191,6 +204,11 @@ export interface ThreatResult {
   theirBest: { move: string; target: string; maxPct: number; koN: number; koChance: number };
   speedMatchup: "faster" | "slower" | "tie";
   threatLevel: ThreatLevel;
+  // Answer check (only for must-answer set: top 50 + megas)
+  isMustAnswer: boolean;
+  answered: boolean;
+  answerer?: string;
+  answerReason?: ThreatAnswer["reason"];
 }
 
 export interface ThreatAnswer {
@@ -218,6 +236,7 @@ export interface ThreatAnalysisResult {
   dangerousMoves: DangerousMove[];
   uncoveredCount: number;   // Dangerous moves with no answer
   answerRate: number;       // 0-100: % of dangerous moves answered
+  unansweredThreatCount: number; // Must-answer Pokemon with no reliable answer
 }
 
 export interface TeamThreatResult {
@@ -290,15 +309,17 @@ export function computeThreatScore(
   myTeam: PoolMember[],
   opponent: PoolMember,
   srConfig?: SRConfig,
+  mustAnswerSet?: Set<string>,
 ): ThreatResult {
   // SR fractions
   const enemySRFrac = srConfig?.ourSR
     ? 1 - getSRChipPct(opponent.types) / 100
     : undefined;
 
-  // Our best: which member + move deals the most damage?
+  // Mega exclusivity: if opponent is mega, only consider non-mega team members
+  const eligibleMembers = opponent.isMega ? myTeam.filter((m) => !m.isMega) : myTeam;
   let ourBest: BestHit = { member: "", move: "", maxPct: 0, koN: 0, koChance: 0 };
-  for (const member of myTeam) {
+  for (const member of eligibleMembers) {
     for (const moveName of member.moves) {
       const r = computeMoveDamage(member, opponent, moveName, enemySRFrac);
       if (r && r.maxPct > ourBest.maxPct) {
@@ -308,30 +329,26 @@ export function computeThreatScore(
   }
 
   // Their best: which move + which of our members takes the most damage?
-  // For wall builds, test both HB and HD variants — use the one that takes LESS damage
   let theirBest = { move: "", target: "", maxPct: 0, koN: 0, koChance: 0 };
   for (const moveName of opponent.moves) {
-    for (const member of myTeam) {
+    for (const member of eligibleMembers) {
       const memberSRFrac = srConfig?.enemySR
         ? 1 - getSRChipPct(member.types) / 100
         : undefined;
-
-      // Test both HB and HD variants for wall builds, pick less damage
       let r = computeMoveDamage(opponent, member, moveName, memberSRFrac);
       const alt = getDefensiveAlternate(member);
       if (alt) {
         const rAlt = computeMoveDamage(opponent, alt, moveName, memberSRFrac);
         if (rAlt && (!r || rAlt.maxPct < r.maxPct)) r = rAlt;
       }
-
       if (r && r.maxPct > theirBest.maxPct) {
         theirBest = { move: moveName, target: member.name, maxPct: r.maxPct, koN: r.koN, koChance: r.koChance };
       }
     }
   }
 
-  // Speed: compare fastest team member vs opponent
-  const ourFastest = Math.max(...myTeam.map((m) => m.speedStat ?? 0));
+  // Speed: compare fastest eligible team member vs opponent
+  const ourFastest = Math.max(...eligibleMembers.map((m) => m.speedStat ?? 0));
   const oppSpeed = opponent.speedStat ?? 0;
   const speedMatchup: "faster" | "slower" | "tie" =
     ourFastest > oppSpeed ? "faster" : ourFastest < oppSpeed ? "slower" : "tie";
@@ -342,7 +359,22 @@ export function computeThreatScore(
     speedMatchup,
   );
 
-  return { opponent, ourBest, theirBest, speedMatchup, threatLevel };
+  // Answer check: only for must-answer set (top 50 + megas)
+  const isMustAnswer = mustAnswerSet?.has(opponent.name) ?? false;
+  let answered = !isMustAnswer; // non-must-answer = skip check (treated as answered)
+  let answerer: string | undefined;
+  let answerReason: ThreatAnswer["reason"] | undefined;
+
+  if (isMustAnswer && theirBest.move) {
+    const { answer } = findAnswer(myTeam, opponent, theirBest.move, oppSpeed, srConfig, opponent.isMega);
+    if (answer) {
+      answered = true;
+      answerer = answer.member;
+      answerReason = answer.reason;
+    }
+  }
+
+  return { opponent, ourBest, theirBest, speedMatchup, threatLevel, isMustAnswer, answered, answerer, answerReason };
 }
 
 const ALL_TYPES = [
@@ -374,7 +406,11 @@ function findAnswer(
   dangerousMoveName: string,
   enemySpeed: number,
   srConfig?: SRConfig,
+  excludeMegas?: boolean,
 ): { answer: ThreatAnswer | null; speedTieAnswer: ThreatAnswer | null } {
+  // Self-weakening moves: HP cost or stat drop makes the user weaker after firing.
+  // The answer just needs to survive the first hit and threaten back.
+  const isSelfWeakeningMove = HP_COST_50_MOVES.has(dangerousMoveName) || SELF_DEBUFF_MOVES.has(dangerousMoveName);
   let bestAnswer: ThreatAnswer | null = null;
   let bestPriority = 999;
   let bestSpeedTie: ThreatAnswer | null = null;
@@ -386,6 +422,9 @@ function findAnswer(
     : undefined;
 
   for (const member of myTeam) {
+    // Mega exclusivity: our mega cannot answer an enemy mega
+    if (excludeMegas && member.isMega) continue;
+
     const memberSRFrac = srConfig?.enemySR
       ? 1 - getSRChipPct(member.types) / 100
       : undefined;
@@ -419,6 +458,9 @@ function findAnswer(
       let enemyBestDmg = 0;
       let enemyBestKoN = 99;
       for (const enmove of enemy.moves) {
+        // ADR-005a: Skip banned moves
+        if (CHARGE_TURN_MOVES.has(enmove) && !CHARGE_EXEMPT_ABILITIES.has(enemy.ability)) continue;
+        if (RECHARGE_MOVES.has(enmove)) continue;
         const r = computeMoveDamage(enemy, variant, enmove, memberSRFrac);
         if (r && r.maxPct > enemyBestDmg) {
           enemyBestDmg = r.maxPct;
@@ -469,9 +511,18 @@ function findAnswer(
         continue;
       }
 
+      // For self-weakening moves (Steel Beam, Draco Meteor etc.), the enemy weakens
+      // after firing. If we survive the hit AND can 2HKO, that's enough — the enemy
+      // lost 50% HP (Steel Beam) or has halved SpA (Draco Meteor) so they can't keep up.
+      const weWin1v1Adjusted = weWin1v1 || (
+        isSelfWeakeningMove && incomingDmg && incomingDmg.koN >= 2 && ourBestKoN <= 2
+      );
+
       // Priority 2: Resists the dangerous move
       if (incomingDmg && incomingDmg.effectiveness < 1 && ourBestKoN <= 3) {
-        if (!weWin1v1) continue;
+        // Reject if the dangerous move still OHKOs despite resistance
+        if (incomingDmg.koN === 1 && incomingDmg.koChance >= 1) continue;
+        if (!weWin1v1Adjusted) continue;
         tryUpdate(2, "resist_threat");
         continue;
       }
@@ -492,10 +543,11 @@ function findAnswer(
         const weWin = outspeeds
           ? ourBestKoN <= enemyBestKoN
           : ourBestKoN < enemyBestKoN;
-        if (weWin) {
+        // For self-weakening moves, also accept 2HKO even if KO race is marginal
+        const weWinAdjusted = weWin || (isSelfWeakeningMove && ourBestKoN <= enemyBestKoN);
+        if (weWinAdjusted) {
           tryUpdate(4, "1v1_winner");
         } else if (isSpeedTie && ourBestKoN <= enemyBestKoN) {
-          // Would win if faster (ourKoN <= enemyKoN with speed advantage)
           trySpeedTie(4, "1v1_winner");
         }
       }
@@ -503,6 +555,26 @@ function findAnswer(
   }
 
   return { answer: bestAnswer, speedTieAnswer: bestAnswer ? null : bestSpeedTie };
+}
+
+const MUST_ANSWER_TOP_N = 50;
+
+/** Build the must-answer set: all megas + top N non-megas by overallScore */
+function buildMustAnswerSet(pool: PoolMember[]): Set<string> {
+  const set = new Set<string>();
+  const nonMegas: PoolMember[] = [];
+  for (const p of pool) {
+    if (p.isMega) {
+      set.add(p.name);
+    } else {
+      nonMegas.push(p);
+    }
+  }
+  nonMegas.sort((a, b) => (b.overallScore ?? 0) - (a.overallScore ?? 0));
+  for (let i = 0; i < Math.min(MUST_ANSWER_TOP_N, nonMegas.length); i++) {
+    set.add(nonMegas[i].name);
+  }
+  return set;
 }
 
 /** Full threat analysis of our team vs the entire pool */
@@ -513,11 +585,15 @@ export function computeFullThreatAnalysis(
 ): ThreatAnalysisResult {
   const teamNames = new Set(myTeam.map((m) => m.name));
   const enemies = pool.filter((p) => !teamNames.has(p.name));
+  const mustAnswerSet = buildMustAnswerSet(pool);
 
-  // 1. Threat ranking
+  // 1. Threat ranking (with answer check for must-answer set)
   const threats = enemies
-    .map((opp) => computeThreatScore(myTeam, opp, srConfig))
+    .map((opp) => computeThreatScore(myTeam, opp, srConfig, mustAnswerSet))
     .sort((a, b) => {
+      // Unanswered must-answer threats first
+      if (a.isMustAnswer && !a.answered && !(b.isMustAnswer && !b.answered)) return -1;
+      if (b.isMustAnswer && !b.answered && !(a.isMustAnswer && !a.answered)) return 1;
       const levelOrder: Record<ThreatLevel, number> = { critical: 0, high: 1, medium: 2, low: 3 };
       const ld = levelOrder[a.threatLevel] - levelOrder[b.threatLevel];
       if (ld !== 0) return ld;
@@ -526,35 +602,26 @@ export function computeFullThreatAnalysis(
     });
 
   // 2. Coverage gaps: types we have no SE move for
-  const teamMoveTypes = new Set<string>();
-  for (const member of myTeam) {
-    for (const moveName of member.moves) {
-      teamMoveTypes.add(getMoveType(moveName));
-    }
-  }
-  // A type is "covered" if we have a move type that is SE against it
-  // For simplicity, check which types in the pool we can't hit SE
+  //    Use pure type-chart lookup (single-type) to avoid complex-type interference.
+  //    e.g. Ice→Dragon should always count even if the only Dragon in pool is Dragon/Steel.
   const coverageGaps: string[] = [];
   for (const defType of ALL_TYPES) {
-    // Check if any team member has an SE hit against a pure-type Pokemon of this type
     let canHitSE = false;
-    // Find a pool member of this type to test against
-    const representative = enemies.find((p) => p.types.includes(defType));
-    if (representative) {
-      for (const member of myTeam) {
-        for (const moveName of member.moves) {
-          const r = computeMoveDamage(member, representative, moveName);
-          if (r && r.effectiveness > 1) {
-            canHitSE = true;
-            break;
-          }
+    for (const member of myTeam) {
+      for (const moveName of member.moves) {
+        const moveType = getMoveType(moveName) as any;
+        if (getEffectiveness(moveType, [defType] as any[]) > 1) {
+          canHitSE = true;
+          break;
         }
-        if (canHitSE) break;
       }
-    } else {
-      canHitSE = true; // no representative in pool, not relevant
+      if (canHitSE) break;
     }
-    if (!canHitSE) coverageGaps.push(defType);
+    // Only report gap if there are pool Pokemon with this type (relevant to the meta)
+    if (!canHitSE) {
+      const hasRepresentative = enemies.some((p) => p.types.includes(defType));
+      if (hasRepresentative) coverageGaps.push(defType);
+    }
   }
 
   // 3. Dangerous moves: opponent moves that threaten 3+ team members
@@ -562,10 +629,16 @@ export function computeFullThreatAnalysis(
   const moveHitsMap = new Map<string, DangerousMove>();
   for (const enemy of enemies) {
     const enemySpeed = enemy.speedStat ?? 0;
+    // Mega exclusivity: if enemy is mega, only count non-mega team members as targets
+    const enemyIsMega = enemy.isMega;
+    const eligibleTargets = enemyIsMega ? myTeam.filter((m) => !m.isMega) : myTeam;
     for (const moveName of enemy.moves) {
+      // ADR-005a: Skip banned moves
+      if (CHARGE_TURN_MOVES.has(moveName) && !CHARGE_EXEMPT_ABILITIES.has(enemy.ability)) continue;
+      if (RECHARGE_MOVES.has(moveName)) continue;
       const key = `${enemy.name}::${moveName}`;
       const targets: { name: string; maxPct: number; koN: number; koChance: number }[] = [];
-      for (const member of myTeam) {
+      for (const member of eligibleTargets) {
         // For dangerous move target listing, use enemy SR + HB/HD best variant
         const memberSRFrac = srConfig?.enemySR
           ? 1 - getSRChipPct(member.types) / 100
@@ -583,7 +656,8 @@ export function computeFullThreatAnalysis(
       if (targets.length >= 3) {
         const ohkoCount = targets.filter((t) => t.koN === 1 && t.koChance >= 1).length;
         // Find an answer: a team member that can reliably handle the user
-        const { answer, speedTieAnswer } = findAnswer(myTeam, enemy, moveName, enemySpeed, srConfig);
+        // Mega exclusivity: our mega cannot answer an enemy mega
+        const { answer, speedTieAnswer } = findAnswer(myTeam, enemy, moveName, enemySpeed, srConfig, enemyIsMega);
         moveHitsMap.set(key, {
           user: enemy.name,
           move: moveName,
@@ -614,8 +688,9 @@ export function computeFullThreatAnalysis(
   const answerRate = dangerousMoves.length > 0
     ? Math.round(((dangerousMoves.length - uncoveredCount) / dangerousMoves.length) * 100)
     : 100;
+  const unansweredThreatCount = threats.filter((t) => t.isMustAnswer && !t.answered).length;
 
-  return { threats, coverageGaps, dangerousMoves, uncoveredCount, answerRate };
+  return { threats, coverageGaps, dangerousMoves, uncoveredCount, answerRate, unansweredThreatCount };
 }
 
 // ─── Adoption Reason Analysis ─────────────────────────────────
@@ -728,9 +803,12 @@ export function findSolutions(
 
     const candidates: SolutionCandidate[] = [];
 
+    const enemyIsMega = enemy.isMega;
     for (const candidate of pool) {
       if (teamNames.has(candidate.name)) continue;
       if (oppNames.has(candidate.name)) continue;
+      // Mega exclusivity: don't suggest a mega as answer to an enemy mega
+      if (enemyIsMega && candidate.isMega) continue;
 
       // Use single-member findAnswer logic inline
       const { answer } = findAnswer([candidate], enemy, dm.move, enemySpeed);
@@ -786,50 +864,37 @@ export function computeTeamThreat(
   return { threats, overallDifficulty, worstMatchups };
 }
 
-// ─── Meta Tier Weights (Competitive Usage-Based) ──────────────
+// ─── Meta Tier Weights (Usage-Based from Pool Data) ──────────────
 
-/** Tier weights based on competitive meta usage. S=10×, A/Mega=9×, B=8×, C=7×, D=6×, E=5×, Untiered=1×. */
-export const META_TIER_WEIGHTS: Record<string, number> = {
-  // S tier (weight 10)
-  Garchomp: 10, Corviknight: 10, Primarina: 10,
-  // A tier (weight 9)
-  Archaludon: 9, Kingambit: 9, Hippowdon: 9, Espathra: 9, Aegislash: 9,
-  // B tier (weight 8)
-  Hydreigon: 8, Mimikyu: 8, Rotom: 8, Toxapex: 8, Diggersby: 8,
-  Glimmora: 8, Umbreon: 8, Meowscarada: 8, Sneasler: 8, Basculegion: 8,
-  // C tier (weight 7)
-  Azumarill: 7, "Mr. Rime": 7, Sylveon: 7, Tyranitar: 7, Snorlax: 7,
-  Ceruledge: 7, Dragapult: 7,
-  // D tier (weight 6)
-  Mamoswine: 6, "Samurott-Hisui": 6, "Slowbro-Galar": 6, Palafin: 6,
-  Greninja: 6, Sinistcha: 6, Volcarona: 6, Gallade: 6, Avalugg: 6,
-  // E tier (weight 5)
-  Dragonite: 5, Incineroar: 5, Skeledirge: 5, Skarmory: 5,
-  Excadrill: 5, Arcanine: 5, Orthworm: 5, Torterra: 5,
-  Pelipper: 5, "Ninetales-Alola": 5, "Goodra-Hisui": 5, Araquanid: 5,
-};
-
-const MEGA_WEIGHT = 9; // All megas = A tier equivalent
-const UNTIERED_WEIGHT = 1;
+/**
+ * Usage-weight map built at runtime from pool data.
+ * Populated by buildUsageWeights() before ranking computation.
+ */
+let usageWeightMap = new Map<string, number>();
 
 export type MetaTier = "S" | "A" | "B" | "C" | "D" | "E" | "Mega" | "-";
 
-export function getMetaWeight(name: string, isMega: boolean): number {
-  const w = META_TIER_WEIGHTS[name];
-  if (isMega) return Math.max(w ?? 0, MEGA_WEIGHT);
-  return w ?? UNTIERED_WEIGHT;
+/** Build usage weights from pool usagePct. Call once before ranking. */
+export function buildUsageWeights(pool: PoolMember[]): void {
+  usageWeightMap = new Map();
+  for (const p of pool) usageWeightMap.set(p.name, p.usagePct ?? 1);
 }
 
+export function getMetaWeight(name: string): number {
+  return usageWeightMap.get(name) ?? 1;
+}
+
+/** Derive tier from usagePct: S≥8%, A≥5%, B≥3%, C≥2%, D≥1%, E<1%. Megas always "Mega". */
 export function getMetaTier(name: string, isMega: boolean): MetaTier {
-  const w = META_TIER_WEIGHTS[name];
   if (isMega) return "Mega";
-  if (!w) return "-";
-  if (w >= 10) return "S";
-  if (w >= 9) return "A";
-  if (w >= 8) return "B";
-  if (w >= 7) return "C";
-  if (w >= 6) return "D";
-  return "E";
+  const w = usageWeightMap.get(name) ?? 0;
+  if (w >= 8) return "S";
+  if (w >= 5) return "A";
+  if (w >= 3) return "B";
+  if (w >= 2) return "C";
+  if (w >= 1) return "D";
+  if (w > 0) return "E";
+  return "-";
 }
 
 export interface WeightedRankingEntry {
@@ -859,6 +924,9 @@ export function computeWeightedRanking(
   pool: PoolMember[],
   damageMatrix: DamageMatrix,
 ): WeightedRankingEntry[] {
+  // Ensure usage weights are initialized from pool data
+  buildUsageWeights(pool);
+
   return pool.map((member) => {
     let weightedWins = 0;
     let totalWeight = 0;
@@ -870,7 +938,7 @@ export function computeWeightedRanking(
       const bToA = damageMatrix[opponent.name]?.[member.name];
       if (!aToB || !bToA) continue;
 
-      const oppWeight = getMetaWeight(opponent.name, opponent.isMega);
+      const oppWeight = getMetaWeight(opponent.name);
       totalWeight += oppWeight;
 
       const aKoN = aToB.koN || 99; // 0 = no KO in 4 hits → treat as 99
@@ -905,7 +973,7 @@ export function computeWeightedRanking(
     return {
       member,
       tier: getMetaTier(member.name, member.isMega),
-      metaWeight: getMetaWeight(member.name, member.isMega),
+      metaWeight: getMetaWeight(member.name),
       weightedWinRate,
       rawWinRate: member.winRate1v1 ?? 0,
       composite,

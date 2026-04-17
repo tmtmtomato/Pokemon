@@ -212,6 +212,11 @@ export function TeamDetail({
                   {t.high}: {team.threatProfile.highThreats}
                 </span>
               )}
+              {team.threatProfile.dangerousAttackerUncovered > 0 && (
+                <span className="rounded bg-red-500/20 px-2 py-0.5 text-red-400 font-semibold">
+                  {lang === "ja" ? "広範囲危険" : "Wide threats"}: {team.threatProfile.dangerousAttackerUncovered}{lang === "ja" ? "体 未回答" : " uncovered"}
+                </span>
+              )}
               {team.threatProfile.unansweredCount === 0 && (
                 <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-emerald-400 font-semibold">
                   {lang === "ja" ? "完全回答" : "All answered"}

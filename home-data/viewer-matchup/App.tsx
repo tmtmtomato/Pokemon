@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import matchupJson from "../storage/analysis/2026-04-10-team-matchup.json";
+import matchupJson from "../storage/analysis/_latest-team-matchup.json";
 import type { TeamMatchupResult, RankedTeam } from "../types/team-matchup";
 import { useLang } from "../viewer/LanguageContext";
 import { localizePokemon } from "../viewer/i18n";
@@ -50,10 +50,7 @@ export default function App() {
         return db - da || b.winRate - a.winRate;
       }
       if (sortKey === "combined") {
-        // Same formula as pipeline ranking: 0.6*WR + 0.4*dominance
-        const sa = 0.6 * (a.winRate * 100) + 0.4 * (a.threatProfile?.dominanceScore ?? 0);
-        const sb = 0.6 * (b.winRate * 100) + 0.4 * (b.threatProfile?.dominanceScore ?? 0);
-        return sb - sa || b.winRate - a.winRate;
+        return (b.compositeScore ?? 0) - (a.compositeScore ?? 0) || b.winRate - a.winRate;
       }
       return b.winRate - a.winRate;
     });

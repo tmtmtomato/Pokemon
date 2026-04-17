@@ -8,7 +8,7 @@ import MoveConsistencyDetail from "./components/MoveConsistencyDetail";
 import TeamMoveDetail from "./components/TeamMoveDetail";
 import ThreatAnalysis from "./components/ThreatAnalysis";
 
-import rawData from "../storage/analysis/2026-04-10-team-matchup.json";
+import rawData from "../storage/analysis/_latest-team-matchup.json";
 import metaRankingData from "../storage/analysis/meta-ranking.json";
 const data = rawData as unknown as TeamMatchupResult;
 
@@ -29,6 +29,13 @@ export default function App() {
 
   const pool = useMemo(() =>
     [...data.pool].sort((a, b) => (b.overallScore ?? 0) - (a.overallScore ?? 0)),
+    [],
+  );
+
+  // Sort teams by compositeScore (same order as matchup viewer)
+  const sortedTeams = useMemo(() =>
+    [...data.topTeams].sort((a, b) =>
+      (b.compositeScore ?? 0) - (a.compositeScore ?? 0) || b.winRate - a.winRate),
     [],
   );
 
@@ -71,7 +78,7 @@ export default function App() {
           />
         ) : mode === "team" ? (
           <TeamSidebar
-            teams={data.topTeams}
+            teams={sortedTeams}
             selected={selectedTeamId}
             onSelect={setSelectedTeamId}
             lang={lang}

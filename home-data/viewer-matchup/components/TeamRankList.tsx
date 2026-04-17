@@ -62,6 +62,11 @@ export function TeamRankList({ teams, selected, onSelect, lang }: TeamRankListPr
             <div className="flex items-baseline justify-between">
               <span className="text-[10px] text-gray-500 tabular-nums">
                 #{t.rank}
+                {t.growthPotential && (
+                  <span className="ml-0.5 text-sky-400" title={lang === "ja" ? "成長性あり" : "Growth potential"}>
+                    &#9650;
+                  </span>
+                )}
               </span>
               <span className="text-xs text-gray-200 tabular-nums">
                 WR:{wrPct}%

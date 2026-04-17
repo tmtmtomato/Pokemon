@@ -8,6 +8,7 @@ import {
   findSolutions,
   getSRChipPct,
   getMetaTier,
+  buildUsageWeights,
   type SRConfig,
   type ThreatLevel,
   type ThreatResult,
@@ -130,6 +131,9 @@ export default function ThreatAnalysis({ pool, topTeams, pokemonStats, metaRanki
     }
     return result;
   }, [myTeam, analysis, selectedTeam, inputMode]);
+
+  // Initialize usage weights from pool data (needed for tier classification)
+  useMemo(() => buildUsageWeights(pool), [pool]);
 
   // Meta tier grouped list for display
   const metaTierGroups = useMemo(() => {
@@ -410,8 +414,9 @@ export default function ThreatAnalysis({ pool, topTeams, pokemonStats, metaRanki
 
       {/* Answer rate summary */}
       {analysis.dangerousMoves.length > 0 && (
-        <div className={`rounded px-3 py-2 text-xs flex items-center gap-3 ${
-          analysis.uncoveredCount > 0 ? "bg-red-900/30 border border-red-800/50" : "bg-emerald-900/30 border border-emerald-800/50"
+        <div className={`rounded px-3 py-2 text-xs flex flex-wrap items-center gap-3 ${
+          (analysis.uncoveredCount > 0 || analysis.unansweredThreatCount > 0)
+            ? "bg-red-900/30 border border-red-800/50" : "bg-emerald-900/30 border border-emerald-800/50"
         }`}>
           <span className="text-gray-300 font-medium">
             {lang === "ja" ? "脅威回答率" : "Threat Answer Rate"}
@@ -428,7 +433,12 @@ export default function ThreatAnalysis({ pool, topTeams, pokemonStats, metaRanki
           </span>
           {analysis.uncoveredCount > 0 && (
             <span className="text-red-400">
-              {analysis.uncoveredCount} {lang === "ja" ? "件の未回答脅威" : "uncovered"}
+              {analysis.uncoveredCount} {lang === "ja" ? "件の未回答技" : "uncovered moves"}
+            </span>
+          )}
+          {analysis.unansweredThreatCount > 0 && (
+            <span className="text-red-400">
+              | {analysis.unansweredThreatCount} {lang === "ja" ? "体の未回答ポケモン" : "unanswered Pokemon"}
             </span>
           )}
         </div>
@@ -480,6 +490,9 @@ function ThreatRankingSection({ threats, lang, srConfig }: { threats: ThreatResu
     <div>
       <h3 className="text-sm font-bold text-gray-200 mb-2">
         {lang === "ja" ? "脅威ランキング" : "Threat Ranking"}
+        <span className="ml-2 text-xs text-gray-500 font-normal">
+          {lang === "ja" ? "TOP50+メガに対して回答判定（メガ排他考慮）" : "Answer check for Top50 + Megas (mega-exclusive)"}
+        </span>
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
@@ -490,16 +503,24 @@ function ThreatRankingSection({ threats, lang, srConfig }: { threats: ThreatResu
               <th className="text-left py-1 px-2">{lang === "ja" ? "相手最善" : "Their Best"}</th>
               <th className="text-center py-1 px-2">{lang === "ja" ? "速度" : "Speed"}</th>
               <th className="text-center py-1 px-2">{lang === "ja" ? "脅威度" : "Threat"}</th>
+              <th className="text-left py-1 px-2">{lang === "ja" ? "回答" : "Answer"}</th>
             </tr>
           </thead>
           <tbody>
             {displayed.map((t) => {
               const badge = THREAT_BADGE[t.threatLevel];
               return (
-                <tr key={t.opponent.name} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                <tr key={t.opponent.name} className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${
+                  t.isMustAnswer && !t.answered ? "bg-red-900/10" : ""
+                }`}>
                   <td className="py-1.5 px-2">
                     <div className="flex items-center gap-1">
                       <span className="text-gray-200">{localizePokemon(t.opponent.name, lang)}</span>
+                      {t.isMustAnswer && (
+                        <span className="text-[8px] text-amber-500 font-medium">
+                          {t.opponent.isMega ? "Mega" : "TOP"}
+                        </span>
+                      )}
                       {srConfig?.ourSR && (() => {
                         const chip = getSRChipPct(t.opponent.types);
                         return chip >= 25
@@ -545,6 +566,28 @@ function ThreatRankingSection({ threats, lang, srConfig }: { threats: ThreatResu
                     <span className={`${badge.cls} rounded px-1.5 py-0.5 text-[10px] font-medium`}>
                       {lang === "ja" ? badge.labelJa : badge.label}
                     </span>
+                  </td>
+                  <td className="py-1.5 px-2">
+                    {t.isMustAnswer ? (
+                      t.answered ? (
+                        <div>
+                          <span className={`text-[10px] ${ANSWER_LABELS[t.answerReason ?? ""]?.cls ?? "text-green-400"}`}>
+                            {lang === "ja"
+                              ? ANSWER_LABELS[t.answerReason ?? ""]?.ja ?? "回答あり"
+                              : ANSWER_LABELS[t.answerReason ?? ""]?.en ?? "OK"}
+                          </span>
+                          <div className="text-[9px] text-gray-600 truncate max-w-[6rem]">
+                            {localizePokemon(t.answerer ?? "", lang)}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-red-400 font-medium">
+                          {lang === "ja" ? "未回答" : "No answer"}
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-[10px] text-gray-600">-</span>
+                    )}
                   </td>
                 </tr>
               );
@@ -632,7 +675,7 @@ function DangerousMovesSection({ moves, lang }: { moves: DangerousMove[]; lang: 
       <h3 className="text-sm font-bold text-gray-200 mb-2">
         {lang === "ja" ? "危険な技と回答" : "Dangerous Moves & Answers"}
         <span className="ml-2 text-xs text-gray-500 font-normal">
-          {lang === "ja" ? "味方3体以上に刺さる技" : "Hits 3+ team members"}
+          {lang === "ja" ? "構築全体に50%+ダメージを3体以上に与える技（メガ排他考慮）" : "Moves dealing 50%+ to 3+ members (mega-exclusive)"}
         </span>
       </h3>
       <div className="space-y-1.5">

@@ -1,44 +1,29 @@
 /**
- * Pre-compute tier-weighted 1v1 rankings from the damage matrix.
+ * Pre-compute usage-weighted 1v1 rankings from the damage matrix.
  * Outputs a small JSON file used by the viewer (avoids bundling the large matrix).
+ *
+ * Weights are derived from actual pool usage percentages (usagePct)
+ * rather than hardcoded tier assignments.
  *
  * Usage: node home-data/scripts/compute-meta-ranking.mjs
  */
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { join } from "path";
 
-const DATA_PATH = "home-data/storage/analysis/2026-04-10-team-matchup.json";
-const OUT_PATH = "home-data/storage/analysis/meta-ranking.json";
+// Auto-resolve latest team-matchup JSON by modification time
+const ANALYSIS_DIR = "home-data/storage/analysis";
+const matchupFiles = readdirSync(ANALYSIS_DIR)
+  .filter(f => f.endsWith("-team-matchup.json") && !f.startsWith("_"))
+  .sort((a, b) => statSync(join(ANALYSIS_DIR, b)).mtimeMs - statSync(join(ANALYSIS_DIR, a)).mtimeMs);
+if (matchupFiles.length === 0) {
+  console.error("No *-team-matchup.json found in", ANALYSIS_DIR);
+  process.exit(1);
+}
+const DATA_PATH = join(ANALYSIS_DIR, matchupFiles[0]);
+const OUT_PATH = join(ANALYSIS_DIR, "meta-ranking.json");
+console.log(`Using: ${matchupFiles[0]}`);
 
 const data = JSON.parse(readFileSync(DATA_PATH, "utf-8"));
-
-// Meta tier weights — must match moveCalc.ts META_TIER_WEIGHTS
-// S=10×, A/Mega=9×, B=8×, C=7×, D=6×, E=5×, Untiered=1×
-const META_TIER_WEIGHTS = {
-  // S tier (weight 10)
-  Garchomp: 10, Corviknight: 10, Primarina: 10,
-  // A tier (weight 9)
-  Archaludon: 9, Kingambit: 9, Hippowdon: 9, Espathra: 9, Aegislash: 9,
-  // B tier (weight 8)
-  Hydreigon: 8, Mimikyu: 8, Rotom: 8, Toxapex: 8, Diggersby: 8,
-  Glimmora: 8, Umbreon: 8, Meowscarada: 8, Sneasler: 8, Basculegion: 8,
-  // C tier (weight 7)
-  Azumarill: 7, "Mr. Rime": 7, Sylveon: 7, Tyranitar: 7, Snorlax: 7,
-  Ceruledge: 7, Dragapult: 7,
-  // D tier (weight 6)
-  Mamoswine: 6, "Samurott-Hisui": 6, "Slowbro-Galar": 6, Palafin: 6,
-  Greninja: 6, Sinistcha: 6, Volcarona: 6, Gallade: 6, Avalugg: 6,
-  // E tier (weight 5)
-  Dragonite: 5, Incineroar: 5, Skeledirge: 5, Skarmory: 5,
-  Excadrill: 5, Arcanine: 5, Orthworm: 5, Torterra: 5,
-  Pelipper: 5, "Ninetales-Alola": 5, "Goodra-Hisui": 5, Araquanid: 5,
-};
-const MEGA_WEIGHT = 9;
-
-function getMetaWeight(name, isMega) {
-  const w = META_TIER_WEIGHTS[name];
-  if (isMega) return Math.max(w ?? 0, MEGA_WEIGHT);
-  return w ?? 1;
-}
 
 // KO quality: fast KOs worth more than stall victories
 function koQuality(koN) {
@@ -53,6 +38,12 @@ function koQuality(koN) {
 const pool = data.pool;
 const matrix = data.damageMatrix;
 
+// Build usage weight map from pool data (usagePct as natural meta weight)
+const usageWeights = new Map();
+for (const member of pool) {
+  usageWeights.set(member.name, member.usagePct ?? 1);
+}
+
 const ranking = pool.map((member) => {
   let weightedWins = 0;
   let totalWeight = 0;
@@ -63,7 +54,7 @@ const ranking = pool.map((member) => {
     const bToA = matrix[opp.name]?.[member.name];
     if (!aToB || !bToA) continue;
 
-    const oppWeight = getMetaWeight(opp.name, opp.isMega);
+    const oppWeight = usageWeights.get(opp.name) ?? 1;
     totalWeight += oppWeight;
 
     const aKoN = aToB.koN || 99;

@@ -17,6 +17,7 @@ export interface DamageMatrixEntry {
   priorityKoN: number; // KO count from best priority move (0 if none)
   priorityKoChance: number; // KO chance for priority move (0 if none)
   recoilPctToSelf: number; // recoil damage per use of bestMove, as % of attacker's HP (0 if no recoil)
+  isStatDrop?: boolean; // true if bestMove has a self-stat-drop (Draco Meteor, Overheat, etc.) — cannot be used twice at full power
 }
 
 /** Full 49×49 damage matrix: matrix[attackerName][defenderName] */
@@ -87,6 +88,14 @@ export interface ThreatEntry {
   hasAnswer: boolean;      // Can we reliably handle this opponent?
 }
 
+/** An unanswered threat for targeted refinement (ADR-004b) */
+export interface UnansweredThreat {
+  opponentName: string;
+  oppSpeed: number;
+  usagePct: number;  // 0-100
+  isMustAnswer: boolean; // ADR-006: mega or top-50 overallScore opponent
+}
+
 /** Aggregate threat profile for a team vs the pool */
 export interface ThreatProfile {
   killPressure: number;      // 0-100: offensive dominance (殺意)
@@ -98,6 +107,9 @@ export interface ThreatProfile {
   unansweredCount: number;   // Count of unanswered opponents
   criticalGaps: number;      // Count of unanswered top-10 usage opponents
   topThreats: ThreatEntry[]; // Top 5 most dangerous opponents
+  unansweredOpponents: UnansweredThreat[]; // ADR-004b: detailed unanswered threats
+  dangerousAttackerCount: number;     // ADR-005b: attackers hitting 3+ members at 50%+
+  dangerousAttackerUncovered: number; // ADR-005b: subset with no answer
 }
 
 /** A ranked team in the final output */
@@ -118,11 +130,15 @@ export interface RankedTeam {
   losses: number;
   draws: number;
   avgScore: number;
+  /** 0.6 × WR% + 0.4 × dominance — canonical ranking score */
+  compositeScore: number;
   commonSelections: SelectionPattern[];
   /** Per-member selection rates computed from ALL selection patterns */
   memberSelectionRates: MemberSelectionRate[];
   /** Number of dead-weight members (selected <5% of games) */
   deadMemberCount: number;
+  /** Selection concentrated on fewer members — room for improvement */
+  growthPotential: boolean;
   typeProfile: {
     offensiveTypes: string[];
     defensiveWeaks: string[];

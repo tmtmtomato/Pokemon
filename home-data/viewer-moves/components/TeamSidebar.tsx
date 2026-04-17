@@ -23,7 +23,14 @@ export default function TeamSidebar({ teams, selected, onSelect, lang }: Props) 
           }`}
         >
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-gray-500 w-5 text-right tabular-nums shrink-0">#{t.rank}</span>
+            <span className="text-gray-500 w-5 text-right tabular-nums shrink-0">
+              #{t.rank}
+              {t.growthPotential && (
+                <span className="ml-0.5 text-sky-400" title={lang === "ja" ? "成長性あり" : "Growth potential"}>
+                  &#9650;
+                </span>
+              )}
+            </span>
             <div className="flex-1 min-w-0">
               <span className="text-emerald-400 tabular-nums font-medium">
                 {(t.winRate * 100).toFixed(1)}%

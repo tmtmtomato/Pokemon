@@ -11,6 +11,7 @@
  *
  * Usage:
  *   npx tsx home-data/analyzer/singles-ranking.ts [--date 2026-04-10]
+ *   npx tsx home-data/analyzer/singles-ranking.ts --source pokechamdb
  */
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
@@ -349,6 +350,48 @@ function loadNatures(
       .slice(0, MAX_NATURES);
   }
   return [];
+}
+
+// ── Pokechamdb data loading ──────────────────────────────────────────────────
+
+function loadPokechamdbDetail(name: string): PikaDetail | null {
+  const path = resolve(STORAGE, `pokechamdb/singles/${name}.json`);
+  if (!existsSync(path)) return null;
+  const data = loadJson<PikaDetail>(path);
+  data.pokemon = name;
+  return data;
+}
+
+interface PokechamdbNatureEntry {
+  id: string;
+  val: string;
+}
+
+function loadPokechamdbNatures(pokemonName: string): { nature: string; pct: number }[] {
+  const path = resolve(STORAGE, `pokechamdb/natures/${pokemonName}.json`);
+  if (!existsSync(path)) return [];
+  const data = loadJson<{ pokemon: string; speciesId: number; natures: PokechamdbNatureEntry[] }>(path);
+  return data.natures
+    .map((n) => ({
+      nature: NATURE_NAMES[parseInt(n.id)] ?? "Hardy",
+      pct: parseFloat(n.val),
+    }))
+    .filter((n) => n.pct >= MIN_NATURE_PCT)
+    .slice(0, MAX_NATURES);
+}
+
+/** Load pokechamdb usage percentages (rank-based). Returns name → usagePct map. */
+function loadPokechamdbUsage(): Map<string, number> {
+  const path = resolve(STORAGE, "pokechamdb/top30-raw.json");
+  if (!existsSync(path)) return new Map();
+  const data = loadJson<{ name: string; rank: number }[]>(path);
+  const result = new Map<string, number>();
+  // Convert rank to a synthetic usage percentage: rank 1 = 100%, rank 30 = ~3%
+  for (const entry of data) {
+    const usagePct = Math.max(1, Math.round(100 - (entry.rank - 1) * (97 / 29)));
+    result.set(entry.name, usagePct);
+  }
+  return result;
 }
 
 // ── Build generation ────────────────────────────────────────────────────────
@@ -1279,34 +1322,56 @@ function getSEWeakTypes(name: string, build: BuildConfig): string[] {
 
 function main() {
   const dateArg = process.argv.find((a, i) => process.argv[i - 1] === "--date") ?? "2026-04-10";
+  const sourceArg = process.argv.find((a, i) => process.argv[i - 1] === "--source") ?? "pikalytics";
 
   console.log(`[singles-ranking] Starting...`);
-  console.log(`[singles-ranking] Date: ${dateArg}`);
+  console.log(`[singles-ranking] Date: ${dateArg}, Source: ${sourceArg}`);
 
   // 1. Load Champions roster (all Pokemon in the game)
   const roster: string[] = loadJson(resolve(ROOT, "home-data/storage/champions-roster.json"));
   console.log(`[1/5] Loaded ${roster.length} Champions Pokemon`);
 
-  // 2. Build name→ID mapping for raw-recon
-  const nameToId = buildNameToIdMap();
-  console.log(`[2/5] Name→ID mapping: ${nameToId.size} entries`);
+  // 2. Build name→ID mapping for raw-recon (only needed for pikalytics source)
+  let nameToId: Map<string, { id: string; form: string }> = new Map();
+  let pokechamdbUsage: Map<string, number> = new Map();
+  if (sourceArg === "pokechamdb") {
+    pokechamdbUsage = loadPokechamdbUsage();
+    console.log(`[2/5] Pokechamdb usage data: ${pokechamdbUsage.size} entries`);
+  } else {
+    nameToId = buildNameToIdMap();
+    console.log(`[2/5] Name→ID mapping: ${nameToId.size} entries`);
+  }
 
-  // 3. Generate builds for all Pokemon (Pikalytics data where available, fallback otherwise)
+  // 3. Generate builds for all Pokemon
   const allMeta: MetaPokemon[] = [];
   let pikaCount = 0;
   let defaultCount = 0;
   for (let rank = 0; rank < roster.length; rank++) {
     const name = roster[rank];
-    const pikaDetail = loadPikaDetail(name);
-    const natures = loadNatures(nameToId, name);
+
+    // Load detail and natures based on source
+    let pikaDetail: PikaDetail | null;
+    let natures: { nature: string; pct: number }[];
+    if (sourceArg === "pokechamdb") {
+      pikaDetail = loadPokechamdbDetail(name);
+      natures = loadPokechamdbNatures(name);
+    } else {
+      pikaDetail = loadPikaDetail(name);
+      natures = loadNatures(nameToId, name);
+    }
+
+    // Determine usage percentage
+    const usagePct = sourceArg === "pokechamdb"
+      ? (pokechamdbUsage.get(name) ?? 1) / 100
+      : 1.0;
 
     let meta: MetaPokemon | null;
     if (pikaDetail) {
-      // Has Pikalytics data - use existing logic with equal weight
-      meta = generateBuilds(pikaDetail, natures, 1.0, rank + 1);
+      // Has detail data - use existing logic
+      meta = generateBuilds(pikaDetail, natures, usagePct, rank + 1);
       if (meta) pikaCount++;
     } else {
-      // No Pikalytics data - generate default build
+      // No detail data - generate default build
       meta = generateDefaultBuild(name, natures, rank + 1);
       if (meta) defaultCount++;
     }
@@ -1316,13 +1381,14 @@ function main() {
       const natStr = natures.length > 0
         ? natures.map((n) => `${n.nature}(${n.pct}%)`).join(", ")
         : "inferred";
-      const source = pikaDetail ? "pika" : "default";
+      const source = pikaDetail ? (sourceArg === "pokechamdb" ? "pokechamdb" : "pika") : "default";
       console.log(
         `  ${name}: ${meta.builds.length} builds, ${meta.moves.length} moves [${natStr}] (${source})`,
       );
     }
   }
-  console.log(`  Sources: ${pikaCount} from Pikalytics, ${defaultCount} from default builds`);
+  const sourceLabel = sourceArg === "pokechamdb" ? "pokechamdb" : "Pikalytics";
+  console.log(`  Sources: ${pikaCount} from ${sourceLabel}, ${defaultCount} from default builds`);
 
   const totalBuilds = allMeta.reduce((s, m) => s + m.builds.length, 0);
   console.log(`[3/5] Generated ${totalBuilds} builds across ${allMeta.length} Pokemon`);
